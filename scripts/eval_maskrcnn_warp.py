@@ -31,7 +31,7 @@ def get_iou(gt, pred):
 
 def warp_all(associated_proposals, flo):
   masks = associated_proposals.get_field('mask')
-  pool = mp.Pool(4)
+  # pool = mp.Pool(4)
   # warped_masks = torch.cat([pool.apply(warp, args = (mask.unsqueeze(0).float().cuda(),
   #                                                    flo.unsqueeze(0).permute(0, -1, 1, 2).cuda()))
   #                           for mask in masks], dim=0)
@@ -141,10 +141,10 @@ def main():
   seqs = davis_data_dir + "ImageSets/2017/val.txt"
   lines = ['breakdance']
   pool = mp.Pool(5)
-  # with open(os.path.join(seqs), "r") as lines:
-  #  pool.map(run_eval, [line for line in lines])
-  for line in lines:
-    run_eval(line)
+  with open(os.path.join(seqs), "r") as lines:
+   pool.map(run_eval, [line for line in lines])
+  # for line in lines:
+  #   run_eval(line)
 
 
 if __name__ == '__main__':
