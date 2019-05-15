@@ -75,20 +75,18 @@ def save_tracklets(proposals, warped_proposals, out_folder, f):
     print("proposal length", len(list(proposals.values())))
     shape = list(proposals.values())[0]['mask'].shape[2:]
   output_mask = np.zeros(shape)
-  result_dict = {}
-  ids_chosen = []
   track_ids = np.ones_like(proposals.get_field('scores'))*-1
   ious = np.ones_like(proposals.get_field('scores'))*-1
 
-  for i in range(len(warped_proposals.get_field('mask'))):
-    warped_mask = warped_proposals.get_field('mask')[i]
-    mask, iou, id = get_best_match(warped_mask, proposals.get_field('mask'))
-    if mask is not None:
+  for i in range(len(proposals.get_field('mask'))):
+    proposal_mask = proposals.get_field('mask')[i]
+    warped_mask, iou, id = get_best_match(proposal_mask, warped_proposals.get_field('mask'))
+    if warped_mask is not None:
       # result_masks[i] = mask
-      track_ids[id] = i if not warped_proposals.has_field('track_ids') else warped_proposals.get_field('track_ids')[i]
-      output_mask[(mask[0] == 1).data.cpu().numpy() == 1] = track_ids[id]+1
-      ious[id] = iou
-      ids_chosen+=[id]
+      track_ids[i] = id if not warped_proposals.has_field('track_ids') else warped_proposals.get_field('track_ids')[id]
+      output_mask[proposal_mask[0].data.cpu().numpy() == 1] = track_ids[i]+1
+      ious[i] = iou
+      # ids_chosen+=[id]
 
   max_track_id = np.max(track_ids)
   if (track_ids == -1).sum() > 0:
@@ -98,12 +96,6 @@ def save_tracklets(proposals, warped_proposals, out_folder, f):
       output_mask[proposals.get_field('mask')[index][0].data.cpu().numpy() == 1] = track_ids[index] + 1
   proposals.add_field('track_ids', track_ids)
 
-  # for id in range(len(proposals.get_field('mask'))):
-  #   if id not in ids_chosen:
-  #     track_ids[id]=i
-  #     i=i+1
-
-  # proposals.add_field('mask', torch.cat(result_masks, dim=0))
   proposals.add_field('ious', ious)
   out_file = os.path.join(out_folder, '{:05d}'.format(f + 1) + ".pickle")
   print("pickling {}".format(out_file))
