@@ -13,6 +13,11 @@ from util import select_top_predictions, save_mask, write_output_mask, get_one_h
 
 CONF_THRESH=0.0
 IOU_THRESH = 0.1
+
+# flags to switch the reid modules
+USE_ORACLE_REID = False
+USE_REID = False
+
 maskrcnn_data_dir = "/globalwork/mahadevan/mywork/data/training/pytorch/forwarded/maskrcnn/"
 warped_data_dir = "../results/maskrcnn_warped"
 davis_data_dir = '/globalwork/data/DAVIS-Unsupervised/DAVIS/'
@@ -109,27 +114,22 @@ def save_tracklets(proposals, warped_proposals, out_folder, f):
   output_mask = np.zeros(shape)
   track_ids = np.ones_like(proposals.get_field('scores'))*-1
   ious = np.ones_like(proposals.get_field('scores'))*-1
-  gt_ids = np.ones_like(proposals.get_field('scores')) * -1
 
-  # use ground truth tracks for oracle re-id
-  for i in range(len(proposals.get_field('gt_masks'))):
-    gt_mask, iou, id = get_best_match(torch.from_numpy(proposals.get_field('gt_masks')[i]).unsqueeze(0),
-                                      proposals.get_field('mask'))
-    if gt_mask is not None:
-      gt_ids[id] = i
-      track_ids[id] = i
+  # get track associations based on re-id
+  reid_tracks = get_reid_tracks(proposals, track_ids)
 
   for i in range(len(proposals.get_field('mask'))):
     proposal_mask = proposals.get_field('mask')[i]
     warped_mask, iou, id = get_best_match(proposal_mask, warped_proposals.get_field('mask'))
-    gt_track = gt_ids[i] != -1
+    reid_flag = reid_tracks[i] != -1
 
     if warped_mask is not None:
-      # result_masks[i] = mask
-      if not gt_track:
+      # associate tracks based on warped proposals if there is no re-id score
+      if not reid_flag:
         track_ids[i] = id if not warped_proposals.has_field('track_ids') else warped_proposals.get_field('track_ids')[id]
       else:
-        track_ids[i] = int(proposals.get_field('gt_tracks_ids')[int(gt_ids[i])])
+        # TODO: integrate re-id tracks based on the re-id score
+        track_ids[i] = int(proposals.get_field('gt_tracks_ids')[int(reid_tracks[i])])
       output_mask[proposal_mask[0].data.cpu().numpy() == 1] = track_ids[i]+1
       ious[i] = iou
       # ids_chosen+=[id]
@@ -155,6 +155,30 @@ def save_tracklets(proposals, warped_proposals, out_folder, f):
     save_mask(output_mask.astype(np.int), out_file)
 
   return proposals
+
+
+def get_reid_tracks(proposals, track_ids):
+  gt_ids = np.ones_like(proposals.get_field('scores')) * -1
+  if USE_ORACLE_REID:
+    gt_ids = oracle_reid(proposals, track_ids)
+  elif USE_REID:
+    gt_ids = reid(proposals, track_ids)
+  return gt_ids
+
+
+def oracle_reid(proposals, track_ids):
+  gt_ids = np.ones_like(proposals.get_field('scores')) * -1
+  # use ground truth tracks for oracle re-id
+  for i in range(len(proposals.get_field('gt_masks'))):
+    gt_mask, iou, id = get_best_match(torch.from_numpy(proposals.get_field('gt_masks')[i]).unsqueeze(0),
+                                      proposals.get_field('mask'))
+    if gt_mask is not None:
+      gt_ids[id] = i
+      track_ids[id] = i
+  return gt_ids
+
+def reid():
+  pass
 
 
 def run_eval(line):
