@@ -163,3 +163,20 @@ def overlay_predicitons(image, predictions):
     result = overlay_class_names(result, top_predictions)
 
     return result
+
+
+def write_output_mask(proposals, path):
+    result_mask = np.zeros(list(proposals.get_field('mask').shape[2:]))
+    for i in range(len(proposals.get_field('mask'))):
+        result_mask[proposals.get_field('mask')[i,0].data.cpu().numpy() == 1] = proposals.get_field('track_ids')[i] + 1
+    save_mask(result_mask, path)
+
+
+def get_one_hot_vectors(mask):
+    num_objects = np.setdiff1d(np.unique(mask), [0])
+    one_hot_mask = np.zeros((len(num_objects), ) + mask.shape)
+
+    for i in range(len(num_objects)):
+        one_hot_mask[i] = (mask == (i + 1)).astype(np.uint8)
+
+    return one_hot_mask

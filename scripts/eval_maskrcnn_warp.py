@@ -5,12 +5,13 @@ import numpy as np
 import multiprocessing as mp
 
 import torch
+from PIL import Image
 
 from lib.flowlib import read_flow
 from scripts.warp_davis_maskrcnn import warp
-from util import select_top_predictions, save_mask
+from util import select_top_predictions, save_mask, write_output_mask, get_one_hot_vectors
 
-CONF_THRESH=0.8
+CONF_THRESH=0.0
 IOU_THRESH = 0.1
 maskrcnn_data_dir = "/globalwork/mahadevan/mywork/data/training/pytorch/forwarded/maskrcnn/"
 warped_data_dir = "../results/maskrcnn_warped"
@@ -57,6 +58,37 @@ def get_best_match(ref_obj, proposals):
   return mask, best_iou, target_id
 
 
+def get_initial_proposal(line, out_folder):
+  initial_proposals = os.path.join(maskrcnn_data_dir, line, '{:05d}'.format(0) + ".pickle")
+  proposals = pickle.load(open(initial_proposals, 'rb'))
+
+  # TODO: select topn n instead of using conf thresh
+  associated_proposals = select_top_predictions(proposals, CONF_THRESH)
+  associated_proposals.add_field('track_ids', list(range(len(associated_proposals.get_field('mask')))))
+  write_output_mask(associated_proposals, out_folder + '/{:05d}.png'.format(0))
+  pickle.dump(associated_proposals, open(out_folder + '/{:05d}.pickle'.format(0), 'wb'))
+
+  # use gt for oracle reid
+  gt_path = os.path.join(davis_data_dir, "Annotations_unsupervised/480p", line, '{:05d}.png'.format(0))
+  gt = get_one_hot_vectors(np.array(Image.open(gt_path), dtype=np.uint16))
+  gt_tracks = np.ones(len(gt))*-1
+
+  # use ground truth tracks for oracle re-id.
+  # FIXME: assume that all gt objects are available in the first frame for now
+  for i in range(len(gt)):
+    gt_mask, iou, id = get_best_match(torch.from_numpy(gt[i]).unsqueeze(0),
+                                      associated_proposals.get_field('mask'))
+    if gt_mask is None:
+      print("WARN: GT object not found in the first frame proposals")
+      gt_tracks[i] = np.max(associated_proposals.get_field("track_ids")) + 1
+    else:
+      gt_tracks[i] = id
+
+  # add gt track ids for oracle re-id
+  associated_proposals.add_field("gt_tracks_ids", gt_tracks)
+  return associated_proposals
+
+
 def save_tracklets(proposals, warped_proposals, out_folder, f):
   """
   
@@ -77,13 +109,27 @@ def save_tracklets(proposals, warped_proposals, out_folder, f):
   output_mask = np.zeros(shape)
   track_ids = np.ones_like(proposals.get_field('scores'))*-1
   ious = np.ones_like(proposals.get_field('scores'))*-1
+  gt_ids = np.ones_like(proposals.get_field('scores')) * -1
+
+  # use ground truth tracks for oracle re-id
+  for i in range(len(proposals.get_field('gt_masks'))):
+    gt_mask, iou, id = get_best_match(torch.from_numpy(proposals.get_field('gt_masks')[i]).unsqueeze(0),
+                                      proposals.get_field('mask'))
+    if gt_mask is not None:
+      gt_ids[id] = i
+      track_ids[id] = i
 
   for i in range(len(proposals.get_field('mask'))):
     proposal_mask = proposals.get_field('mask')[i]
     warped_mask, iou, id = get_best_match(proposal_mask, warped_proposals.get_field('mask'))
+    gt_track = gt_ids[i] != -1
+
     if warped_mask is not None:
       # result_masks[i] = mask
-      track_ids[i] = id if not warped_proposals.has_field('track_ids') else warped_proposals.get_field('track_ids')[id]
+      if not gt_track:
+        track_ids[i] = id if not warped_proposals.has_field('track_ids') else warped_proposals.get_field('track_ids')[id]
+      else:
+        track_ids[i] = int(proposals.get_field('gt_tracks_ids')[int(gt_ids[i])])
       output_mask[proposal_mask[0].data.cpu().numpy() == 1] = track_ids[i]+1
       ious[i] = iou
       # ids_chosen+=[id]
@@ -118,28 +164,33 @@ def run_eval(line):
   if not os.path.exists(out_folder):
     os.makedirs(out_folder)
   all_proposals = glob.glob(os.path.join(maskrcnn_data_dir, line, "*.pickle"))
-  initial_proposals = os.path.join(maskrcnn_data_dir, line, '{:05d}'.format(0) + ".pickle")
-  proposals = pickle.load(open(initial_proposals, 'rb'))
-  # TODO: select topn n instead of using conf thresh
-  associated_proposals = select_top_predictions(proposals, CONF_THRESH)
+
+  # generate the proposals for the first frame
+  associated_proposals = get_initial_proposal(line, out_folder)
+
   for i in range(len(all_proposals) - 1):
     # warped_proposals_path = os.path.join(warped_data_dir, line, '{:05d}'.format(i + 1) + ".pickle")
     # warped_proposals = pickle.load(open(warped_proposals_path, 'rb'))
     # warp the proposals
     flo = torch.from_numpy(read_flow(os.path.join(flow_dir, line, '{:05d}'.format(i+1) + ".flo"))).float()
     warped_proposals = warp_all(associated_proposals, flo)
-    # warped_proposals = warp(associated_proposals.get_field('mask')[i:i + 1].float().cuda(),
-    #                         flo.unsqueeze(0).permute(0, -1, 1, 2).cuda())
+
+    # use gt for oracle reid
+    gt_path = os.path.join(davis_data_dir, "Annotations_unsupervised/480p", line, '{:05d}.png'.format(i+1))
+    gt = get_one_hot_vectors(np.array(Image.open(gt_path), dtype=np.uint16))
 
     proposals_raw_path = os.path.join(maskrcnn_data_dir, line, '{:05d}'.format(i+1) + ".pickle")
     proposals_raw = pickle.load(open(proposals_raw_path, 'rb'))
     proposals_raw = select_top_predictions(proposals_raw, CONF_THRESH)
+    proposals_raw.add_field('gt_masks', gt)
+    proposals_raw.add_field('gt_tracks_ids', warped_proposals.get_field('gt_tracks_ids'))
+
     associated_proposals = save_tracklets(proposals_raw, warped_proposals, out_folder, i)
 
 
 def main():
   seqs = davis_data_dir + "ImageSets/2017/val.txt"
-  lines = ['breakdance']
+  lines = ['drift-straight']
   pool = mp.Pool(5)
   with open(os.path.join(seqs), "r") as lines:
    pool.map(run_eval, [line for line in lines])
