@@ -9,16 +9,18 @@ from PIL import Image
 
 from lib.flowlib import read_flow
 from scripts.warp_davis_maskrcnn import warp
-from util import select_top_predictions, save_mask, write_output_mask, get_one_hot_vectors
+from util import save_mask, write_output_mask, get_one_hot_vectors, top_n_predictions_maskrcnn
 
 CONF_THRESH=0.0
 IOU_THRESH = 0.1
+MAX_PROPOSALS=20
 
 # flags to switch the reid modules
 USE_ORACLE_REID = False
 USE_REID = False
 
-maskrcnn_data_dir = "/globalwork/mahadevan/mywork/data/training/pytorch/forwarded/maskrcnn/"
+# maskrcnn_data_dir = "/globalwork/mahadevan/mywork/data/training/pytorch/forwarded/maskrcnn/thresh-0.7/"
+maskrcnn_data_dir = "../results/converted_proposals/thresh-0/"
 warped_data_dir = "../results/maskrcnn_warped"
 davis_data_dir = '/globalwork/data/DAVIS-Unsupervised/DAVIS/'
 flow_dir = "/globalwork/data/DAVIS-Unsupervised/DAVIS/flo/"
@@ -36,7 +38,7 @@ def get_iou(gt, pred):
 
 
 def warp_all(associated_proposals, flo):
-  masks = associated_proposals.get_field('mask')
+  masks = associated_proposals['masks']
   # pool = mp.Pool(4)
   # warped_masks = torch.cat([pool.apply(warp, args = (mask.unsqueeze(0).float().cuda(),
   #                                                    flo.unsqueeze(0).permute(0, -1, 1, 2).cuda()))
@@ -45,7 +47,7 @@ def warp_all(associated_proposals, flo):
   warped_masks = torch.cat([warp(mask.unsqueeze(0).float().cuda(),
                                  flo.unsqueeze(0).permute(0, -1, 1, 2).cuda())
                             for mask in masks], dim=0)
-  associated_proposals.add_field('mask', warped_masks)
+  associated_proposals['masks'] = warped_masks
   return associated_proposals
 
 
@@ -68,8 +70,8 @@ def get_initial_proposal(line, out_folder):
   proposals = pickle.load(open(initial_proposals, 'rb'))
 
   # TODO: select topn n instead of using conf thresh
-  associated_proposals = select_top_predictions(proposals, CONF_THRESH)
-  associated_proposals.add_field('track_ids', list(range(len(associated_proposals.get_field('mask')))))
+  associated_proposals = top_n_predictions_maskrcnn(proposals, MAX_PROPOSALS)
+  associated_proposals['track_ids'] = list(range(len(associated_proposals['masks'])))
   write_output_mask(associated_proposals, out_folder + '/{:05d}.png'.format(0))
   pickle.dump(associated_proposals, open(out_folder + '/{:05d}.pickle'.format(0), 'wb'))
 
@@ -82,15 +84,16 @@ def get_initial_proposal(line, out_folder):
   # FIXME: assume that all gt objects are available in the first frame for now
   for i in range(len(gt)):
     gt_mask, iou, id = get_best_match(torch.from_numpy(gt[i]).unsqueeze(0),
-                                      associated_proposals.get_field('mask'))
+                                      associated_proposals['masks'])
     if gt_mask is None:
       print("WARN: GT object not found in the first frame proposals")
-      gt_tracks[i] = np.max(associated_proposals.get_field("track_ids")) + 1
+      gt_tracks[i] = np.max(associated_proposals["track_ids"]) + 1
     else:
       gt_tracks[i] = id
 
   # add gt track ids for oracle re-id
-  associated_proposals.add_field("gt_tracks_ids", gt_tracks)
+  associated_proposals["gt_tracks_ids"] = gt_tracks
+
   return associated_proposals
 
 
@@ -99,37 +102,35 @@ def save_tracklets(proposals, warped_proposals, out_folder, f):
   
   :param proposals: BoxList 
   :param warped_proposals: dict - contains 'n' top predictions orgnanised as dict
-                            dict[i] = {'mask':<nd array with binary mask>, 
+                            dict[i] = {'masks':<nd array with binary mask>, 
                                        'score':<score of the prediction before warp>}
   :param out_folder: 
   :param f: 
   :return: 
   """
   # top_predictions = select_top_predictions(proposals, CONF_THRESH)
-  if hasattr(proposals, "get_field"):
-    shape = proposals.get_field("mask").shape[2:]
-  else:
-    print("proposal length", len(list(proposals.values())))
-    shape = list(proposals.values())[0]['mask'].shape[2:]
+  print("proposal length", len(list(proposals.values())))
+  shape = list(proposals['masks'].shape[2:])
+  track_ids = np.ones_like(proposals['scores']) * -1
+  ious = np.ones_like(proposals['scores']) * -1
   output_mask = np.zeros(shape)
-  track_ids = np.ones_like(proposals.get_field('scores'))*-1
-  ious = np.ones_like(proposals.get_field('scores'))*-1
+
 
   # get track associations based on re-id
   reid_tracks = get_reid_tracks(proposals, track_ids)
 
-  for i in range(len(proposals.get_field('mask'))):
-    proposal_mask = proposals.get_field('mask')[i]
-    warped_mask, iou, id = get_best_match(proposal_mask, warped_proposals.get_field('mask'))
+  for i in range(len(proposals['masks'])):
+    proposal_mask = proposals['masks'][i]
+    warped_mask, iou, id = get_best_match(proposal_mask, warped_proposals['masks'])
     reid_flag = reid_tracks[i] != -1
 
     if warped_mask is not None:
       # associate tracks based on warped proposals if there is no re-id score
       if not reid_flag:
-        track_ids[i] = id if not warped_proposals.has_field('track_ids') else warped_proposals.get_field('track_ids')[id]
+        track_ids[i] = id if not 'track_ids' in warped_proposals else warped_proposals['track_ids'][id]
       else:
         # TODO: integrate re-id tracks based on the re-id score
-        track_ids[i] = int(proposals.get_field('gt_tracks_ids')[int(reid_tracks[i])])
+        track_ids[i] = int(proposals['gt_tracks_ids'][int(reid_tracks[i])])
       output_mask[proposal_mask[0].data.cpu().numpy() == 1] = track_ids[i]+1
       ious[i] = iou
       # ids_chosen+=[id]
@@ -139,10 +140,10 @@ def save_tracklets(proposals, warped_proposals, out_folder, f):
     ids_not_associated = np.where(track_ids == -1)
     track_ids[track_ids==-1]=list(range(int(max_track_id)+1, int(max_track_id)+1 + (track_ids==-1).sum()))
     for index in ids_not_associated[0]:
-      output_mask[proposals.get_field('mask')[index][0].data.cpu().numpy() == 1] = track_ids[index] + 1
-  proposals.add_field('track_ids', track_ids)
+      output_mask[proposals['masks'][index][0].data.cpu().numpy() == 1] = track_ids[index] + 1
+  proposals['track_ids'] =  track_ids
 
-  proposals.add_field('ious', ious)
+  proposals['ious'] = ious
   out_file = os.path.join(out_folder, '{:05d}'.format(f + 1) + ".pickle")
   print("pickling {}".format(out_file))
   pickle.dump(proposals, open(out_file, 'wb'))
@@ -158,7 +159,7 @@ def save_tracklets(proposals, warped_proposals, out_folder, f):
 
 
 def get_reid_tracks(proposals, track_ids):
-  gt_ids = np.ones_like(proposals.get_field('scores')) * -1
+  gt_ids = np.ones_like(proposals['scores']) * -1
   if USE_ORACLE_REID:
     gt_ids = oracle_reid(proposals, track_ids)
   elif USE_REID:
@@ -167,11 +168,11 @@ def get_reid_tracks(proposals, track_ids):
 
 
 def oracle_reid(proposals, track_ids):
-  gt_ids = np.ones_like(proposals.get_field('scores')) * -1
+  gt_ids = np.ones_like(proposals['scores']) * -1
   # use ground truth tracks for oracle re-id
-  for i in range(len(proposals.get_field('gt_masks'))):
-    gt_mask, iou, id = get_best_match(torch.from_numpy(proposals.get_field('gt_masks')[i]).unsqueeze(0),
-                                      proposals.get_field('mask'))
+  for i in range(len(proposals['gt_masks'])):
+    gt_mask, iou, id = get_best_match(torch.from_numpy(proposals['gt_masks'][i]).unsqueeze(0),
+                                      proposals['masks'])
     if gt_mask is not None:
       gt_ids[id] = i
       track_ids[id] = i
@@ -205,9 +206,9 @@ def run_eval(line):
 
     proposals_raw_path = os.path.join(maskrcnn_data_dir, line, '{:05d}'.format(i+1) + ".pickle")
     proposals_raw = pickle.load(open(proposals_raw_path, 'rb'))
-    proposals_raw = select_top_predictions(proposals_raw, CONF_THRESH)
-    proposals_raw.add_field('gt_masks', gt)
-    proposals_raw.add_field('gt_tracks_ids', warped_proposals.get_field('gt_tracks_ids'))
+    proposals_raw = top_n_predictions_maskrcnn(proposals_raw, MAX_PROPOSALS)
+    proposals_raw['gt_masks'] = gt
+    proposals_raw['gt_tracks_ids'] = warped_proposals['gt_tracks_ids']
 
     associated_proposals = save_tracklets(proposals_raw, warped_proposals, out_folder, i)
 
