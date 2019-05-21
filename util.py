@@ -166,9 +166,9 @@ def overlay_predicitons(image, predictions):
 
 
 def write_output_mask(proposals, path):
-    result_mask = np.zeros(list(proposals.get_field('mask').shape[2:]))
-    for i in range(len(proposals.get_field('mask'))):
-        result_mask[proposals.get_field('mask')[i,0].data.cpu().numpy() == 1] = proposals.get_field('track_ids')[i] + 1
+    result_mask = np.zeros(list(proposals['masks'].shape[2:]))
+    for i in range(len(proposals['masks'])):
+        result_mask[proposals['masks'][i,0].data.cpu().numpy() == 1] = proposals['track_ids'][i] + 1
     save_mask(result_mask, path)
 
 
@@ -180,3 +180,27 @@ def get_one_hot_vectors(mask):
         one_hot_mask[i] = (mask == (i + 1)).astype(np.uint8)
 
     return one_hot_mask
+
+
+def top_n_predictions_maskrcnn(predictions, n):
+    """
+    Select top n predictions based on score
+
+    Arguments:
+        predictions (dictionary): the result of the computation by the model.
+            It should contain the field `scores`.
+
+    Returns:
+        prediction (dictionary): the detected objects. Additional information
+            of the detection properties can be found in the fields of
+            the BoxList via `prediction.fields()`
+    """
+    scores = predictions["scores"]
+    n = min(n, len(scores))
+    keep = torch.zeros(scores.shape).bool()
+    topk, indices = torch.topk(scores, n)
+    keep[indices] = True
+    predictions = {key:predictions[key][keep] for key in predictions.keys()}
+    # scores = predictions["scores"]
+    # _, idx = scores.sort(0, descending=True)
+    return predictions
