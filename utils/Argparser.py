@@ -27,6 +27,15 @@ def parse_args():
   parser.add_argument('--remove_gt_proposal', dest='remove_gt_proposal',
                       help='remove the gt proposal randomly',
                       default=False, type=bool)
+  parser.add_argument('--freeze_bn', dest='freeze_bn',
+                      help='freeze batch normalisation layers',
+                      default=False, type=bool)
+  parser.add_argument('--crop_size', dest='crop_size',
+                      help='image crop size',
+                      default=None, type=int)
+  parser.add_argument('--data_sample', dest='data_sample',
+                      help='number of data samples',
+                      default=None, type=int)
 
   # BPTT
   parser.add_argument('--bptt', dest='bptt_len',
@@ -78,6 +87,11 @@ def parse_args():
                       default=False, type=bool)
   parser.add_argument('--adaptive_lr', dest='adaptive_lr',
                       help='use an lr scheduler',
+                      default=False, type=bool)
+
+  # tensorboard summary
+  parser.add_argument('--show_image_summary', dest='show_image_summary',
+                      help='show image summary',
                       default=False, type=bool)
 
   args = parser.parse_args()

@@ -3,6 +3,7 @@ from torch import nn
 from torchvision import models
 from torch.nn import functional as F
 from network.Modules import Refine, GC
+from network.models import BaseNetwork
 
 
 class Encoder(nn.Module):
@@ -86,8 +87,8 @@ class Decoder(nn.Module):
 
     return p, p2, p3, p4, p5
 
-class BaseNetwork():
+class RGMP(BaseNetwork):
   def __init__(self):
-    super(BaseNetwork, self).__init__()
+    super(RGMP, self).__init__()
     self.encoder = Encoder()
     self.decoder = Decoder()
