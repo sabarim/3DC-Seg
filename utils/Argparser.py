@@ -36,6 +36,9 @@ def parse_args():
   parser.add_argument('--data_sample', dest='data_sample',
                       help='number of data samples',
                       default=None, type=int)
+  parser.add_argument('--random_instance', dest='random_instance',
+                      help='random_instance',
+                      default=False, type=bool)
 
   # BPTT
   parser.add_argument('--bptt', dest='bptt_len',
@@ -88,6 +91,9 @@ def parse_args():
   parser.add_argument('--adaptive_lr', dest='adaptive_lr',
                       help='use an lr scheduler',
                       default=False, type=bool)
+  parser.add_argument('--lr_decay', dest='lr_decay',
+                      help='learning rate decay rate',
+                      default=0.95, type=float)
 
   # tensorboard summary
   parser.add_argument('--show_image_summary', dest='show_image_summary',

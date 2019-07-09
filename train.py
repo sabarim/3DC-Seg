@@ -10,7 +10,8 @@ from tensorboardX import SummaryWriter
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, RandomSampler
 
-from datasets.DAVIS import DAVIS
+from datasets.DAVIS import DAVIS, DAVISEval
+from inference_handlers.inference import infer
 from network.FeatureAgg3d import FeatureAgg3d
 from network.models import BaseNetwork
 from utils.Argparser import parse_args
@@ -26,7 +27,6 @@ TRAIN_KITTI = False
 MASK_CHANGE_THRESHOLD = 1000
 
 BBOX_CROP = True
-RANDOM_INSTANCE = True
 BEST_IOU=0
 
 network_models = {0:"RGMP", 1:"FeatureAgg3d"}
@@ -63,11 +63,12 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
     foo.add_scalar("data/loss", loss, count)
     foo.add_scalar("data/iou", iou, count)
     if args.show_image_summary:
-      foo.add_image("data/input", input_var[:, :3], count)
-      foo.add_image("data/guidance", masks_guidance, count)
-      foo.add_image("data/loss_image", loss_image.unsqueeze(1), count)
-      foo.add_image("data/target", target, count)
-      foo.add_image("data/pred", output.unsqueeze(1), count)
+      for index in range(input_var.shape[2]):
+        foo.add_images("data/input" + str(index), input_var[:, :3, index], count)
+        foo.add_images("data/guidance" + str(index), masks_guidance[:, :, index].repeat(1,3,1,1), count)
+      # foo.add_image("data/loss_image", loss_image.unsqueeze(1), count)
+      # foo.add_image("data/target", target, count)
+      # foo.add_image("data/pred", output.unsqueeze(1), count)
 
     # compute gradient and do SGD step
     optimizer.zero_grad()
@@ -123,26 +124,29 @@ def validate(val_loader, model, criterion, epoch, foo):
 
   end = time.time()
   print("Starting validation for epoch {}".format(epoch))
-  for i, input_dict in enumerate(val_loader):
-    with torch.no_grad():
-      # compute output
-      input, input_var, iou, loss, loss_image, masks_guidance, output, target = forward(criterion, input_dict, ious,
-                                                                                        model)
-      loss_image = criterion(output, target.squeeze(1))
-      loss = bootstrapped_ce_loss(loss_image)
-      ious.update(np.mean(iou))
-      losses.update(loss.item(), input.size(0))
-      # measure elapsed time
-      batch_time.update(time.time() - end)
-      end = time.time()
+  for seq in val_loader.dataset.get_video_ids():
+    val_loader.dataset.set_video_id(seq)
+    ious_video = AverageMeter()
+    for i, input_dict in enumerate(val_loader):
+      with torch.no_grad():
+        # compute output
+        input, input_var, iou, loss, loss_image, masks_guidance, output, target = forward(criterion, input_dict, ious,
+                                                                                          model)
+        ious_video.update(np.mean(iou))
+        losses.update(loss.item(), input.size(0))
+        # measure elapsed time
+        batch_time.update(time.time() - end)
+        end = time.time()
 
-      print('Test: [{0}/{1}]\t'
-            'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
-            'Loss {loss.val:.4f} ({loss.avg:.5f})\t'
-            'IOU {iou.val:.4f} ({iou.avg:.5f})\t'.format(
-        i, len(val_loader), batch_time=batch_time, loss=losses, iou=ious))
+        print('Test: [{0}][{1}/{2}]\t'
+              'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+              'Loss {loss.val:.4f} ({loss.avg:.5f})\t'
+              'IOU {iou.val:.4f} ({iou.avg:.5f})\t'.format(
+          input_dict['info']['name'], i, len(val_loader), batch_time=batch_time, loss=losses, iou=ious_video))
+    print('Sequence {0}\t IOU {iou.avg}', input_dict['info']['name'], ious_video)
+    ious.update(ious_video.avg)
 
-  foo.add_scalar("data/losses-test", losses.avg, epoch)
+    foo.add_scalar("data/losses-test", losses.avg, epoch)
 
   print('Finished Eval Epoch {} Loss {losses.avg:.5f} IOU {iou.avg: 5f}'
         .format(epoch, losses=losses, iou=ious))
@@ -157,14 +161,14 @@ if __name__ == '__main__':
     print("Arguments used: {}".format(args))
 
     trainset = DAVIS(DAVIS_ROOT, imset='2017/train.txt', is_train=True,
-                     random_instance=RANDOM_INSTANCE, crop_size=(256, 256))
-    testset = DAVIS(DAVIS_ROOT, imset='2017/val.txt')
+                     random_instance=args.random_instance, crop_size=(256, 256))
+    testset = DAVISEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=False, crop_size=None)
     # sample a subset of data for testing
     sampler = RandomSampler(trainset, replacement=True, num_samples=args.data_sample) \
       if args.data_sample is not None else None
     shuffle = True if args.data_sample is None else False
     trainloader = DataLoader(trainset, batch_size=args.bs, num_workers=args.num_workers, shuffle=shuffle, sampler=sampler)
-    testloader = DataLoader(testset, batch_size=1, num_workers=args.num_workers)
+    testloader = DataLoader(testset, batch_size=1, num_workers=1, shuffle=False)
 
     model_classes = all_subclasses(BaseNetwork)
     class_index = [cls.__name__ for cls in model_classes].index(network_models[args.network])
@@ -177,9 +181,10 @@ if __name__ == '__main__':
         model.cuda()
 
     # print(summary(model, tuple((256,256)), batch_size=1))
-    writer = SummaryWriter(log_dir="runs/" + MODEL_DIR)
+    writer = SummaryWriter(log_dir="runs/" + args.network_name)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    model, optimizer, start_epoch = load_weights(model, optimizer, args.loadepoch, MODEL_DIR)# params
+    model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval = \
+      load_weights(model, optimizer, args.loadepoch, MODEL_DIR)# params
 
     params = []
     for key, value in dict(model.named_parameters()).items():
@@ -189,30 +194,35 @@ if __name__ == '__main__':
     criterion = torch.nn.BCELoss(reduce=False)
     # iters_per_epoch = len(Trainloader)
     model.eval()
-    lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95) if args.adaptive_lr else None
+    lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.lr_decay) if args.adaptive_lr else None
 
     if args.task == "train":
-      best_loss = 0
-      best_iou = 0
-      best_loss_eval = 0
-      best_iou_eval = 0
+      # best_loss = best_loss_train
+      # best_iou = best_iou_train
       if args.freeze_bn:
         model.encoder.freeze_batchnorm()
       for epoch in range(start_epoch, args.num_epochs):
         loss_mean, iou_mean  = train(trainloader, model, criterion, optimizer, epoch, writer)
         if lr_scheduler is not None:
           lr_scheduler.step(epoch)
-        if iou_mean > best_iou or loss_mean < best_loss:
+        if iou_mean > best_iou_train or loss_mean < best_loss_train:
           if not os.path.exists(MODEL_DIR):
             os.makedirs(MODEL_DIR)
+          best_iou_train = iou_mean if iou_mean > best_iou_train else best_iou_train
+          best_loss_train = loss_mean if loss_mean < best_loss_train else best_loss_train
           save_name = '{}/{}.pth'.format(MODEL_DIR, "model_best_train")
-          save_checkpoint(epoch, iou_mean, model, optimizer, save_name)
+          save_checkpoint(epoch, iou_mean, loss_mean, model, optimizer, save_name, is_train=True)
 
         if (epoch + 1) % args.eval_epoch == 0:
           loss_mean, iou_mean = validate(testloader, model, criterion, epoch, writer)
           if iou_mean > best_iou_eval:
+            best_iou_eval = iou_mean
             save_name = '{}/{}.pth'.format(MODEL_DIR, "model_best_eval")
-            save_checkpoint(epoch, iou_mean, model, optimizer, save_name)
-    else:
+            save_checkpoint(epoch, iou_mean, loss_mean, model, optimizer, save_name, is_train=False)
+    elif args.task == 'eval':
       validate(testloader, model, criterion, 1, writer)
+    elif 'infer' in args.task:
+      infer(args.task, testloader, model, criterion, writer)
+    else:
+      raise ValueError("Unknown task {}".format(args.task))
 

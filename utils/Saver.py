@@ -10,6 +10,10 @@ from utils.util import ToLabel
 
 def load_weights(model, optimizer, loadepoch, model_dir):
     start_epoch = 0
+    best_iou_train = 0
+    best_iou_eval = 0
+    best_loss_train = 0
+    best_loss_eval = 0
     # load saved model if specified
     if loadepoch is not None:
       print('Loading checkpoint {}@Epoch {}{}...'.format(font.BOLD, loadepoch, font.END))
@@ -36,15 +40,18 @@ def load_weights(model, optimizer, loadepoch, model_dir):
       if 'optimizer' in checkpoint.keys():
         optimizer.load_state_dict(checkpoint['optimizer'])
         lr = optimizer.param_groups[0]['lr']
-      if 'optimizer_extra' in checkpoint.keys():
-        optimizer.load_state_dict(checkpoint['optimizer_extra'])
-      if 'pooling_mode' in checkpoint.keys():
-        POOLING_MODE = checkpoint['pooling_mode']
+      if 'best_iou' in checkpoint.keys() and checkpoint['task'] == 'train':
+        best_iou_train = checkpoint['best_iou']
+        best_loss_train = checkpoint['loss']
+      elif 'best_iou' in checkpoint.keys():
+        best_iou_eval = checkpoint['best_iou']
+        best_loss_eval = checkpoint['loss']
+
       del checkpoint
       torch.cuda.empty_cache()
       print('Loaded weights from {}'.format(load_name))
 
-    return model, optimizer, start_epoch
+    return model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval
 
 
 def save_results(all_E, info, num_frames, path, palette):
@@ -63,10 +70,13 @@ def save_results(all_E, info, num_frames, path, palette):
     img_E.save(os.path.join(path, '{:05d}.png'.format(f)))
 
 
-def save_checkpoint(epoch, iou_mean, model, optimiser, save_name):
+def save_checkpoint(epoch, iou_mean, loss_mean, model, optimiser, save_name, is_train):
   torch.save({'epoch': epoch,
               'model': model.state_dict(),
               'optimizer': optimiser.state_dict(),
+              'best_iou': iou_mean,
+              'loss': loss_mean,
+              'task': 'train' if is_train else 'eval'
               },
              save_name)
   print("Saving epoch {} with IOU {}".format(epoch, iou_mean))
