@@ -1,4 +1,5 @@
 DAVIS_ROOT = '/globalwork/mahadevan/mywork/data/DAVIS17/DAVIS'
+YOUTUBEVOS_ROOT = '/globalwork/data/youtube-vos/'
 #DAVIS_ROOT = '/disk2/data/DAVIS/'
 PALETTE = [
   0, 0, 0,

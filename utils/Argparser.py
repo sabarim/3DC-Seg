@@ -33,12 +33,27 @@ def parse_args():
   parser.add_argument('--crop_size', dest='crop_size',
                       help='image crop size',
                       default=None, type=int)
+  parser.add_argument('--resize_mode', dest='resize_mode',
+                      help='resize mode',
+                      default="fixed_size", type=str)
+  parser.add_argument('--crop_size_eval', dest='crop_size_eval',
+                      help='image crop size',
+                      default=None, type=int)
+  parser.add_argument('--resize_mode_eval', dest='resize_mode_eval',
+                      help='resize mode',
+                      default="fixed_size", type=str)
   parser.add_argument('--data_sample', dest='data_sample',
                       help='number of data samples',
                       default=None, type=int)
   parser.add_argument('--random_instance', dest='random_instance',
                       help='random_instance',
                       default=False, type=bool)
+  parser.add_argument('--train_dataset', dest='train_dataset',
+                      help='train dataset',
+                      default="davis", type=str)
+  parser.add_argument('--test_dataset', dest='test_dataset',
+                      help='test dataset',
+                      default="davis", type=str)
 
   # BPTT
   parser.add_argument('--bptt', dest='bptt_len',
@@ -88,9 +103,10 @@ def parse_args():
   parser.add_argument('--update_refs', dest='update_refs',
                       help='Update reference objects during evaluation',
                       default=False, type=bool)
-  parser.add_argument('--adaptive_lr', dest='adaptive_lr',
-                      help='use an lr scheduler',
-                      default=False, type=bool)
+  parser.add_argument('--lr_schedulers', dest='lr_schedulers',
+                      help='specify a list of learning rate schedulers',
+                      nargs='*',
+                      default=None, type=str)
   parser.add_argument('--lr_decay', dest='lr_decay',
                       help='learning rate decay rate',
                       default=0.95, type=float)

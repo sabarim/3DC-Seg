@@ -7,27 +7,26 @@ from PIL import Image
 from scipy.misc import imresize
 from torch.utils import data
 
+from utils.Resize import ResizeMode, resize
+
 
 class DAVIS(data.Dataset):
   def __init__(self, root, imset='2017/train.txt', resolution='480p', is_train=False,
                random_instance=False, num_classes=2, crop_size=None,temporal_window=3, min_temporal_gap=2,
-               max_temporal_gap=8):
+               max_temporal_gap=8, resize_mode=ResizeMode.FIXED_SIZE):
     self.current_video = None
     self.root = root
     self.num_classes = num_classes
     self.crop_size = crop_size
     self.is_train = is_train
     self.random_instance = random_instance and is_train
-    # remove proposals that match the ground truth randomly. This can emulate missing proposals/ matches
-    self.mask_dir = os.path.join(root, 'Annotations', resolution)
-    self.image_dir = os.path.join(root, 'JPEGImages', resolution)
-    _imset_dir = os.path.join(root, 'ImageSets')
-    _imset_f = os.path.join(_imset_dir, imset)
+    _imset_f = self.set_paths(imset, resolution, root)
     self.max_proposals = 20
     self.start_index = None
     self.temporal_window = temporal_window
     self.min_temporal_gap = min_temporal_gap
     self.max_temporal_gap = max_temporal_gap
+    self.resize_mode = ResizeMode(resize_mode)
 
     self.videos = []
     self.num_frames = {}
@@ -35,6 +34,15 @@ class DAVIS(data.Dataset):
     self.shape = {}
     self.img_list = []
     self.create_img_list(_imset_f)
+    # max width of a video which can be used for padding during training
+    self.max_w = max([w for (h, w) in self.shape.values()])
+
+  def set_paths(self, imset, resolution, root):
+    self.mask_dir = os.path.join(root, 'Annotations', resolution)
+    self.image_dir = os.path.join(root, 'JPEGImages', resolution)
+    _imset_dir = os.path.join(root, 'ImageSets')
+    _imset_f = os.path.join(_imset_dir, imset)
+    return _imset_f
 
   def create_img_list(self, _imset_f):
     with open(os.path.join(_imset_f), "r") as lines:
@@ -76,19 +84,24 @@ class DAVIS(data.Dataset):
   def read_frame(self, shape, video, f, instance_id=None):
     # use a blend of both full random instance as well as the full object
     img_file = os.path.join(self.image_dir, video, '{:05d}.jpg'.format(f))
-    raw_frames = imresize(np.array(Image.open(img_file).convert('RGB')) / 255., shape) / 255.0
+    raw_frames = np.array(Image.open(img_file).convert('RGB')) / 255.
+    # raw_frames = imresize(np.array(Image.open(img_file).convert('RGB')) / 255., shape) / 255.0
+    # raw_frames = resize(np.array(Image.open(img_file).convert('RGB')) / 255., self.resize_mode, shape)
     try:
       mask_file = os.path.join(self.mask_dir, video, '{:05d}.png'.format(f))  # allways return first frame mask
       raw_mask = imresize(np.array(Image.open(mask_file).convert('P'), dtype=np.uint8), shape,
                           interp="nearest")
     except:
       mask_file = os.path.join(self.mask_dir, video, '00000.png')
-      raw_mask = imresize(np.array(Image.open(mask_file).convert('P'), dtype=np.uint8), shape,
-                          interp="nearest")
+      raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
+      # raw_mask = resize(np.array(Image.open(mask_file).convert('P'), dtype=np.uint8), self.resize_mode, shape)
+      # raw_mask = imresize(np.array(Image.open(mask_file).convert('P'), dtype=np.uint8), shape,
+      #                     interp="nearest")
 
     raw_masks = (raw_mask == instance_id).astype(np.uint8) if instance_id is not None else raw_mask
+    tensors_resized = resize({"image":raw_frames, "mask":raw_masks}, self.resize_mode, shape)
 
-    return raw_frames, raw_masks
+    return tensors_resized["image"] / 255.0, tensors_resized["mask"]
 
   def __getitem__(self, index):
     img_file = self.img_list[index]
@@ -148,9 +161,10 @@ class DAVIS(data.Dataset):
 
 class DAVISEval(DAVIS):
   def __init__(self, root, imset='2017/val.txt', is_train=False, crop_size=None, temporal_window=5,
-               random_instance=False):
+               random_instance=False, resize_mode=ResizeMode.FIXED_SIZE):
     super(DAVISEval, self).__init__(root, imset, is_train=is_train, crop_size=crop_size,
-                                    temporal_window=temporal_window, random_instance=random_instance)
+                                    temporal_window=temporal_window, random_instance=random_instance,
+                                    resize_mode=resize_mode)
 
   def set_video_id(self, video):
     self.current_video = video

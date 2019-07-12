@@ -32,5 +32,19 @@ def iou_fixed(pred, gt, exclude_last=False):
   miou = np.mean(ious)
   return miou
 
+
 def all_subclasses(cls):
   return set(cls.__subclasses__()).union([s for c in cls.__subclasses__() for s in all_subclasses(c)])
+
+
+def get_lr_schedulers(optimiser, args, last_epoch=-1):
+  last_epoch = -1 if last_epoch ==0 else last_epoch
+  lr_schedulers = []
+  if args.lr_schedulers is None:
+    return lr_schedulers
+  if 'exponential' in args.lr_schedulers:
+    lr_schedulers += [torch.optim.lr_scheduler.ExponentialLR(optimiser, gamma=args.lr_decay, last_epoch=last_epoch)]
+  if 'step' in args.lr_schedulers:
+    lr_schedulers += [torch.optim.lr_scheduler.MultiStepLR(optimiser, milestones=[15, 20],
+                                                          last_epoch=last_epoch)]
+  return lr_schedulers

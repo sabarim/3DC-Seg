@@ -57,14 +57,9 @@ def forward(criterion, input_dict, model):
     input_guidance = (masks_guidance == object+1).float().cuda()
     input_var = input.float().cuda()
 
-    label = remove_padding((target == object+1).float(), info)
-    label = F.interpolate(label, size=shape)
+    label = (target == object+1).float()
     # compute output
-    pred = propagate(model, input_var, input_guidance)
-    pred = F.interpolate(pred[0], target.shape[2:], mode="bilinear")
-
-    pred = remove_padding(pred, info)
-    pred = F.interpolate(pred, size=shape)
+    pred = propagate(model, input_var, input_guidance)[0]
     loss_image = criterion(pred[:, -1], label.squeeze(1).cuda().float())
     loss = bootstrapped_ce_loss(loss_image)
 
