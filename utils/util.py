@@ -48,3 +48,12 @@ def get_lr_schedulers(optimiser, args, last_epoch=-1):
     lr_schedulers += [torch.optim.lr_scheduler.MultiStepLR(optimiser, milestones=[15, 20],
                                                           last_epoch=last_epoch)]
   return lr_schedulers
+
+
+def show_image_summary(count, foo, input_var, masks_guidance, target, pred):
+  for index in range(input_var.shape[2]):
+    foo.add_images("data/input" + str(index), input_var[:, :3, index], count)
+    foo.add_images("data/guidance" + str(index), masks_guidance[:, :, index].repeat(1, 3, 1, 1), count)
+  # foo.add_image("data/loss_image", loss_image.unsqueeze(1), count)
+  foo.add_images("data/target", target.repeat(1,3,1,1), count)
+  foo.add_images("data/pred", torch.argmax(pred, dim=1).unsqueeze(1).repeat(1,3,1,1), count)

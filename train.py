@@ -1,5 +1,3 @@
-import importlib
-import inspect
 import os
 import time
 
@@ -7,12 +5,13 @@ import numpy as np
 import torch
 from PIL import Image
 from tensorboardX import SummaryWriter
+from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, RandomSampler
 
-from datasets.DAVIS import DAVIS, DAVISEval
 from inference_handlers.inference import infer
-from network.FeatureAgg3d import FeatureAgg3d
+from network.FeatureAgg3d import FeatureAgg3d, FeatureAgg3dMergeTemporal
+from network.NetworkUtil import run_forward
 from network.models import BaseNetwork
 from utils.Argparser import parse_args
 # Constants
@@ -20,7 +19,8 @@ from utils.AverageMeter import AverageMeter
 from utils.Constants import DAVIS_ROOT
 from utils.Loss import bootstrapped_ce_loss
 from utils.Saver import load_weights, save_checkpoint
-from utils.util import iou_fixed, all_subclasses
+from utils.dataset import get_dataset
+from utils.util import iou_fixed, all_subclasses, get_lr_schedulers, show_image_summary
 
 NUM_EPOCHS = 400
 TRAIN_KITTI = False
@@ -29,20 +29,8 @@ MASK_CHANGE_THRESHOLD = 1000
 BBOX_CROP = True
 BEST_IOU=0
 
-network_models = {0:"RGMP", 1:"FeatureAgg3d"}
+network_models = {0:"RGMP", 1:"FeatureAgg3d", 2: "FeatureAgg3dMergeTemporal", 3: "FeatureAgg3dMulti"}
 palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
-
-
-def propagate(model, inputs, ref_mask):
-  refs = []
-  assert inputs.shape[2] >= 2
-  for i in range(inputs.shape[2]):
-    r5, r4, r3, r2 = model.encoder(inputs[:, :, i], ref_mask[:, :, i])
-    refs+=[r5.unsqueeze(2)]
-  support = torch.cat(refs[:-1], dim=2)
-  e2 = model.decoder(r5, r4, r3, r2, support)
-
-  return (F.softmax(e2[0], dim=1), r5, e2[-1])
 
 
 def train(train_loader, model, criterion, optimizer, epoch, foo):
@@ -63,12 +51,7 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
     foo.add_scalar("data/loss", loss, count)
     foo.add_scalar("data/iou", iou, count)
     if args.show_image_summary:
-      for index in range(input_var.shape[2]):
-        foo.add_images("data/input" + str(index), input_var[:, :3, index], count)
-        foo.add_images("data/guidance" + str(index), masks_guidance[:, :, index].repeat(1,3,1,1), count)
-      # foo.add_image("data/loss_image", loss_image.unsqueeze(1), count)
-      # foo.add_image("data/target", target, count)
-      # foo.add_image("data/pred", output.unsqueeze(1), count)
+      show_image_summary(count, foo, input_var, masks_guidance, target, output)
 
     # compute gradient and do SGD step
     optimizer.zero_grad()
@@ -86,10 +69,10 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
           'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
           'IOU {iou.val:.4f} ({iou.avg:.4f})\t'.format(
       epoch, i * args.bs, len(train_loader)*args.bs, batch_time=batch_time,
-      data_time=data_time, loss=losses, iou=ious))
+      data_time=data_time, loss=losses, iou=ious), flush=True)
 
   print('Finished Train Epoch {} Loss {losses.avg:.5f} IOU {iou.avg: 5f}'
-        .format(epoch, losses=losses, iou=ious))
+        .format(epoch, losses=losses, iou=ious), flush=True)
   return losses.avg, ious.avg
 
 
@@ -102,7 +85,7 @@ def forward(criterion, input_dict, ious, model):
   masks_guidance = masks_guidance.float().cuda()
   input_var = input.float().cuda()
   # compute output
-  pred = propagate(model, input_var, masks_guidance)
+  pred = run_forward(model, input_var, masks_guidance, args)
   pred = F.interpolate(pred[0], target.shape[2:], mode="bilinear")
   # output = F.sigmoid(pred[:, -1])
   # output = F.softmax(pred, dim=1)
@@ -123,7 +106,7 @@ def validate(val_loader, model, criterion, epoch, foo):
   model.eval()
 
   end = time.time()
-  print("Starting validation for epoch {}".format(epoch))
+  print("Starting validation for epoch {}".format(epoch), flush=True)
   for seq in val_loader.dataset.get_video_ids():
     val_loader.dataset.set_video_id(seq)
     ious_video = AverageMeter()
@@ -138,18 +121,22 @@ def validate(val_loader, model, criterion, epoch, foo):
         batch_time.update(time.time() - end)
         end = time.time()
 
+        if args.show_image_summary:
+          show_image_summary(count, foo, input_var, masks_guidance, target, output)
+
         print('Test: [{0}][{1}/{2}]\t'
               'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
               'Loss {loss.val:.4f} ({loss.avg:.5f})\t'
               'IOU {iou.val:.4f} ({iou.avg:.5f})\t'.format(
-          input_dict['info']['name'], i, len(val_loader), batch_time=batch_time, loss=losses, iou=ious_video))
-    print('Sequence {0}\t IOU {iou.avg}', input_dict['info']['name'], ious_video)
+          input_dict['info']['name'], i, len(val_loader), batch_time=batch_time, loss=losses, iou=ious_video),
+          flush=True)
+    print('Sequence {0}\t IOU {iou.avg}'.format(input_dict['info']['name'], iou=ious_video), flush=True)
     ious.update(ious_video.avg)
 
     foo.add_scalar("data/losses-test", losses.avg, epoch)
 
   print('Finished Eval Epoch {} Loss {losses.avg:.5f} IOU {iou.avg: 5f}'
-        .format(epoch, losses=losses, iou=ious))
+        .format(epoch, losses=losses, iou=ious), flush=True)
 
   return losses.avg, ious.avg
 
@@ -158,11 +145,15 @@ if __name__ == '__main__':
     args = parse_args()
     count = 0
     MODEL_DIR = os.path.join('saved_models', args.network_name)
-    print("Arguments used: {}".format(args))
+    print("Arguments used: {}".format(args), flush=True)
 
-    trainset = DAVIS(DAVIS_ROOT, imset='2017/train.txt', is_train=True,
-                     random_instance=args.random_instance, crop_size=(256, 256))
-    testset = DAVISEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=False, crop_size=None)
+    trainset, testset = get_dataset(args)
+    # trainset = DAVIS(DAVIS_ROOT, imset='2017/train.txt', is_train=True,
+    #                  random_instance=args.random_instance, crop_size=args.crop_size, resize_mode=args.resize_mode)
+    # trainset = YoutubeVOSDataset(YOUTUBEVOS_ROOT, imset='train', is_train=True,
+    #                  random_instance=args.random_instance, crop_size=args.crop_size, resize_mode=args.resize_mode)
+    # testset = DAVISEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=False, crop_size=args.crop_size_eval,
+    #                     resize_mode=args.resize_mode_eval)
     # sample a subset of data for testing
     sampler = RandomSampler(trainset, replacement=True, num_samples=args.data_sample) \
       if args.data_sample is not None else None
@@ -173,18 +164,25 @@ if __name__ == '__main__':
     model_classes = all_subclasses(BaseNetwork)
     class_index = [cls.__name__ for cls in model_classes].index(network_models[args.network])
     model = list(model_classes)[class_index]()
-    model = FeatureAgg3d()
-    print("Using model: {}".format(model.__class__))
+    # model = FeatureAgg3dMergeTemporal()
+    print("Using model: {}".format(model.__class__), flush=True)
     print(args)
 
     if torch.cuda.is_available():
-        model.cuda()
+      device_ids = [0, 1]
+      device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+      print("devices available: {}".format(torch.cuda.device_count()))
+      model = torch.nn.DataParallel(model)
+      model.cuda()
+
+    # model.cuda()
     # print(summary(model, tuple((256,256)), batch_size=1))
     writer = SummaryWriter(log_dir="runs/" + args.network_name)
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.Adam(model.module.parameters(), lr=args.lr)
     model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval = \
-      load_weights(model, optimizer, args.loadepoch, MODEL_DIR)# params
+      load_weights(model, optimizer, args.loadepoch, MODEL_DIR, scheduler=None)# params
+    lr_schedulers = get_lr_schedulers(optimizer, args, start_epoch)
 
     params = []
     for key, value in dict(model.named_parameters()).items():
@@ -193,8 +191,7 @@ if __name__ == '__main__':
 
     criterion = torch.nn.BCELoss(reduce=False)
     # iters_per_epoch = len(Trainloader)
-    model.eval()
-    lr_scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=args.lr_decay) if args.adaptive_lr else None
+    # model.eval()
 
     if args.task == "train":
       # best_loss = best_loss_train
@@ -203,7 +200,7 @@ if __name__ == '__main__':
         model.encoder.freeze_batchnorm()
       for epoch in range(start_epoch, args.num_epochs):
         loss_mean, iou_mean  = train(trainloader, model, criterion, optimizer, epoch, writer)
-        if lr_scheduler is not None:
+        for lr_scheduler in lr_schedulers:
           lr_scheduler.step(epoch)
         if iou_mean > best_iou_train or loss_mean < best_loss_train:
           if not os.path.exists(MODEL_DIR):
@@ -211,14 +208,16 @@ if __name__ == '__main__':
           best_iou_train = iou_mean if iou_mean > best_iou_train else best_iou_train
           best_loss_train = loss_mean if loss_mean < best_loss_train else best_loss_train
           save_name = '{}/{}.pth'.format(MODEL_DIR, "model_best_train")
-          save_checkpoint(epoch, iou_mean, loss_mean, model, optimizer, save_name, is_train=True)
+          save_checkpoint(epoch, iou_mean, loss_mean, model, optimizer, save_name, is_train=True,
+                          scheduler=None)
 
         if (epoch + 1) % args.eval_epoch == 0:
           loss_mean, iou_mean = validate(testloader, model, criterion, epoch, writer)
           if iou_mean > best_iou_eval:
             best_iou_eval = iou_mean
             save_name = '{}/{}.pth'.format(MODEL_DIR, "model_best_eval")
-            save_checkpoint(epoch, iou_mean, loss_mean, model, optimizer, save_name, is_train=False)
+            save_checkpoint(epoch, iou_mean, loss_mean, model, optimizer, save_name, is_train=False,
+                            scheduler=lr_scheduler)
     elif args.task == 'eval':
       validate(testloader, model, criterion, 1, writer)
     elif 'infer' in args.task:

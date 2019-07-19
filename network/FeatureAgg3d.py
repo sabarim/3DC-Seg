@@ -2,9 +2,18 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
-from network.Modules import GC
+from network.Modules import GC, SoftmaxSimilarity
 from network.RGMP import Encoder, Decoder
 from network.models import BaseNetwork
+
+
+class EncoderWG(Encoder):
+  def __init__(self, tw=5):
+    super(EncoderWG, self).__init__()
+    self.conv1_p = nn.Conv2d(tw, 64, kernel_size=7, stride=2, padding=3, bias=True)
+
+  def forward(self, in_f, in_p):
+    super(EncoderWG, self).forward(in_f, in_p)
 
 
 class Decoder3d(Decoder):
@@ -40,6 +49,37 @@ class Decoder3dMergeTemporal(Decoder3d):
     self.GC = GC(256,256)
 
 
+class DecoderSM(Decoder3d):
+  def __init__(self, tw=5):
+    super(DecoderSM, self).__init__()
+    self.temporal_net = TemporalNetNoMerge()
+    self.convF1 = nn.Conv2d(in_channels=(tw-1)*256, out_channels=2048, kernel_size=1)
+    self.GC = GC(4096, 256)
+
+  def forward(self, r5, r4, r3, r2, support):
+    # there is a merge step in the temporal net. This split is a hack to fool it
+    x = self.temporal_net(support[:, :, -1], support[:, :, :-1])
+    x = x.reshape(tuple(x.shape[:1]) + (-1,) + tuple(x.shape[3:],))
+    x = self.convF1(F.relu(x))
+    x = torch.cat((x, r5), dim=1)
+    x = self.GC(x)
+    r = self.convG1(F.relu(x))
+    r = self.convG2(F.relu(r))
+    m5 = x + r  # out: 1/32, 64
+    m4 = self.RF4(r4, m5)  # out: 1/16, 64
+    m3 = self.RF3(r3, m4)  # out: 1/8, 64
+    m2 = self.RF2(r2, m3)  # out: 1/4, 64
+
+    p2 = self.pred2(F.relu(m2))
+    p3 = self.pred3(F.relu(m3))
+    p4 = self.pred4(F.relu(m4))
+    p5 = self.pred5(F.relu(m5))
+
+    p = F.interpolate(p2, scale_factor=4, mode='bilinear')
+
+    return p, p2, p3, p4, p5
+
+
 class TemporalNet(BaseNetwork):
   def __init__(self,  tw=5):
     super(TemporalNet, self).__init__()
@@ -54,7 +94,7 @@ class TemporalNet(BaseNetwork):
     self.conv3d_5 = nn.Sequential(nn.Conv3d(in_channels=256, out_channels=256, kernel_size=(3, 1, 1), padding=0),
                                   nn.BatchNorm3d(256), nn.LeakyReLU())
 
-  def forward(self, r5, support):
+  def forward(self, r5, support, no_merge=False):
     x = torch.cat((r5.unsqueeze(2), support), dim=2)
     x = self.conv3d_1(x)
     x = self.conv3d_2(x)
@@ -62,7 +102,22 @@ class TemporalNet(BaseNetwork):
     x = self.conv3d_4(x)
     x = self.conv3d_5(x)
 
-    return x[:, :, -1]
+    if no_merge:
+      return x
+    else:
+      return x[:, :, -1]
+
+
+class TemporalNetNoMerge(TemporalNet):
+  def __init__(self):
+    super(TemporalNetNoMerge, self).__init__()
+    self.conv3d_4 = nn.Sequential(nn.Conv3d(in_channels=256, out_channels=256, kernel_size=(3, 3, 3), padding=1),
+                                  nn.BatchNorm3d(256), nn.LeakyReLU())
+    self.conv3d_5 = nn.Sequential(nn.Conv3d(in_channels=256, out_channels=256, kernel_size=(3, 3, 3), padding=1),
+                                  nn.BatchNorm3d(256), nn.LeakyReLU())
+
+  def forward(self, r5, support, no_merge=True):
+    return super(TemporalNetNoMerge, self).forward(r5, support, True)
 
 
 class TemporalNetSmall(BaseNetwork):
@@ -80,6 +135,31 @@ class TemporalNetSmall(BaseNetwork):
     return x
 
 
+class TemporalAssociation(TemporalNet):
+  def __init__(self, tw=5):
+    super(TemporalAssociation, self).__init__()
+    self.conv3d_4 = nn.Sequential(nn.Conv3d(in_channels=256, out_channels=256, kernel_size=(3, 1, 1), padding=1),
+                                  nn.BatchNorm3d(256), nn.LeakyReLU())
+    self.conv3d_5 = nn.Sequential(nn.Conv3d(in_channels=256, out_channels=256, kernel_size=(3, 1, 1), padding=1),
+                                  nn.BatchNorm3d(256), nn.LeakyReLU())
+    self.conv1x1 = nn.Sequential(nn.Conv2d(in_channels= 256*(tw-1), out_channels=256, kernel_size=1))
+    self.similarity = SoftmaxSimilarity(apply_softmax=True)
+
+  def forward(self, r5, support):
+    x = torch.cat((r5.unsqueeze(2), support), dim=2)
+    x = self.conv3d_1(x)
+    x = self.conv3d_2(x)
+    x = self.conv3d_3(x)
+    x = self.conv3d_4(x)
+    x = self.conv3d_5(x)
+
+    x1 = torch.cat(x[:, :-1], dim=1)
+    x1 = self.conv1x1(x1)
+    x_sim = self.similarity(torch.cat((x1, x[:, :, -1]), dim=1))
+
+    return x[:, :, -1], x_sim
+
+
 class FeatureAgg3d(BaseNetwork):
   def __init__(self):
     super(FeatureAgg3d, self).__init__()
@@ -92,3 +172,18 @@ class FeatureAgg3dMergeTemporal(BaseNetwork):
     super(FeatureAgg3dMergeTemporal, self).__init__()
     self.encoder = Encoder()
     self.decoder = Decoder3dMergeTemporal()
+
+
+class FeatureAgg3dTemporalAssociation(BaseNetwork):
+  def __init__(self):
+    super(FeatureAgg3dTemporalAssociation, self).__init__()
+    self.encoder = Encoder()
+    self.decoder = Decoder3dMergeTemporal()
+
+
+class FeatureAgg3dMulti(BaseNetwork):
+  def __init__(self, tw=5):
+    super(FeatureAgg3dMulti, self).__init__()
+    self.encoder = Encoder()
+    self.encoder2 = Encoder()
+    self.decoder = DecoderSM()

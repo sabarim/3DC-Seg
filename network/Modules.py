@@ -41,3 +41,29 @@ class GC(nn.Module):
     x_r = self.conv_r2(self.conv_r1(x))
     x = x_l + x_r
     return x
+
+
+class SoftmaxSimilarity(nn.Module):
+  def __init__(self, apply_softmax):
+    super(SoftmaxSimilarity, self).__init__()
+    self.apply_softmax = apply_softmax
+    self.softmax = torch.nn.functional.softmax
+
+  def forward(self, x):
+    # Check if it is a spacetime input
+    num_features = x.shape[1]
+    m1 = x[:, :int(num_features/2)]
+    m2 = x[:, int(num_features/2):]
+    shape = m1.shape
+    m1 = m1.permute(0, 2, 3, 1).view(m1.shape[0], m1.shape[2] * m1.shape[3], m1.shape[1])
+    m2 = m2.permute(0, 2, 3, 1).view(m2.shape[0], m2.shape[2] * m2.shape[3], m2.shape[1]).transpose(1, 2)
+
+    output = torch.bmm(m1, m2)
+    # output = output.view(shape[0], shape[2] * shape[3], shape[2], shape[3])
+    if self.apply_softmax:
+        output = self.softmax(output, dim=1)
+    # output = output / output.sum(dim=3)[..., None]
+    # x[DataKeys.INPUTS] = output.reshape(shape[0], shape[2], shape[3], shape[2]*shape[3]).transpose(1,3)
+    x = output.transpose(1, 2).view(shape[0], shape[2] * shape[3], shape[2], shape[3])
+    del m1,m2
+    return x

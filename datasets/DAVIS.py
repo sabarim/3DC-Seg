@@ -1,19 +1,20 @@
 import glob
 import os
 import random
-
+import pickle
 import numpy as np
 from PIL import Image
 from scipy.misc import imresize
 from torch.utils import data
 
+from util import top_n_predictions_maskrcnn
 from utils.Resize import ResizeMode, resize
 
 
 class DAVIS(data.Dataset):
   def __init__(self, root, imset='2017/train.txt', resolution='480p', is_train=False,
-               random_instance=False, num_classes=2, crop_size=None,temporal_window=3, min_temporal_gap=2,
-               max_temporal_gap=8, resize_mode=ResizeMode.FIXED_SIZE):
+               random_instance=False, num_classes=2, crop_size=None,temporal_window=5, min_temporal_gap=2,
+               max_temporal_gap=8, resize_mode=ResizeMode.FIXED_SIZE, proposal_dir=None):
     self.current_video = None
     self.root = root
     self.num_classes = num_classes
@@ -27,6 +28,7 @@ class DAVIS(data.Dataset):
     self.min_temporal_gap = min_temporal_gap
     self.max_temporal_gap = max_temporal_gap
     self.resize_mode = ResizeMode(resize_mode)
+    self.proposal_dir = proposal_dir
 
     self.videos = []
     self.num_frames = {}
@@ -85,8 +87,6 @@ class DAVIS(data.Dataset):
     # use a blend of both full random instance as well as the full object
     img_file = os.path.join(self.image_dir, video, '{:05d}.jpg'.format(f))
     raw_frames = np.array(Image.open(img_file).convert('RGB')) / 255.
-    # raw_frames = imresize(np.array(Image.open(img_file).convert('RGB')) / 255., shape) / 255.0
-    # raw_frames = resize(np.array(Image.open(img_file).convert('RGB')) / 255., self.resize_mode, shape)
     try:
       mask_file = os.path.join(self.mask_dir, video, '{:05d}.png'.format(f))  # allways return first frame mask
       raw_mask = imresize(np.array(Image.open(mask_file).convert('P'), dtype=np.uint8), shape,
@@ -94,14 +94,35 @@ class DAVIS(data.Dataset):
     except:
       mask_file = os.path.join(self.mask_dir, video, '00000.png')
       raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
-      # raw_mask = resize(np.array(Image.open(mask_file).convert('P'), dtype=np.uint8), self.resize_mode, shape)
-      # raw_mask = imresize(np.array(Image.open(mask_file).convert('P'), dtype=np.uint8), shape,
-      #                     interp="nearest")
 
     raw_masks = (raw_mask == instance_id).astype(np.uint8) if instance_id is not None else raw_mask
     tensors_resized = resize({"image":raw_frames, "mask":raw_masks}, self.resize_mode, shape)
 
     return tensors_resized["image"] / 255.0, tensors_resized["mask"]
+
+  def read_proposals(self, video, f, gt_mask):
+    proposal_file = os.path.join(self.proposal_dir, video, '{:05d}.pickle'.format(f))
+    proposals = pickle.load(open(proposal_file, 'rb'))
+    proposals = top_n_predictions_maskrcnn(proposals, self.max_proposals)
+    raw_proposals = np.zeros((self.max_proposals,) + tuple(gt_mask.shape))
+    proposal_categories = np.zeros(self.max_proposals)
+    proposal_scores = np.zeros(self.max_proposals)
+    if len(proposals['mask']) > 0:
+      raw_proposals[:len(proposals['mask'])] = proposals['mask'][:, 0].data.cpu().numpy()
+    else:
+      print("WARN: no proposals found in {}".format(proposal_file))
+    num_proposals = len(proposals['mask'])
+    proposal_scores[:len(proposals['mask'])] = proposals['scores']
+    proposal_categories[:len(proposals['mask'])] = proposals['labels']
+
+    # remove gt proposal if required
+    # if self.remove_gt_proposal:# and np.random.choice([True, False], p=[0.3, 0.7]):
+    #   proposal_selected = get_best_match(torch.from_numpy(gt_mask).unsqueeze(0), torch.from_numpy(raw_proposals),
+    #                                      num_proposals=torch.tensor(num_proposals, dtype=torch.int),
+    #                                      object_categories=torch.from_numpy(proposal_categories))
+    #   if proposal_selected is not None:
+    #     raw_proposals[proposal_selected[2]] = np.zeros_like(raw_proposals[proposal_selected[2]])
+    return num_proposals
 
   def __getitem__(self, index):
     img_file = self.img_list[index]
@@ -152,11 +173,20 @@ class DAVIS(data.Dataset):
     return sequence
 
   def get_support_indices(self, index, sequence):
-    support_indices = [i for i in range(self.num_frames[sequence])
-                       if abs(index - i) > self.min_temporal_gap and abs(index - i) < self.max_temporal_gap]
-    support_indices = np.random.choice(support_indices, self.temporal_window, replace=False)
-    support_indices = np.append(support_indices, np.array([index, np.max(support_indices) - 1]))
-    return support_indices
+    if index == 0:
+      support_indices = np.repeat([0], self.temporal_window)
+    else:
+      support_indices = np.array(list(range(max(0, abs(index - self.max_temporal_gap)),
+                                            max(0, index-self.min_temporal_gap))))
+      if len(support_indices) >= self.temporal_window - 2:
+        support_indices = np.random.choice(support_indices, self.temporal_window - 2, replace=False)
+      else:
+        support_indices = np.append(np.repeat([max(0, index-1)], self.temporal_window - 2 - len(support_indices)),
+                                    support_indices)
+      support_indices = np.append(support_indices, np.array([index, index-1]))
+    support_indices.sort()
+    # print(index, support_indices)
+    return support_indices.astype(np.int)
 
 
 class DAVISEval(DAVIS):
@@ -199,6 +229,48 @@ class DAVISEval(DAVIS):
 
   def get_current_sequence(self, img_file):
     return self.current_video
+
+
+class DAVISInfer(DAVISEval):
+  def __init__(self, root, imset='2017/val.txt', is_train=False, crop_size=None, temporal_window=5,
+               random_instance=False, resize_mode=ResizeMode.FIXED_SIZE):
+    super(DAVISInfer, self).__init__(root, imset, is_train=is_train, crop_size=crop_size,
+                                    temporal_window=temporal_window, random_instance=random_instance,
+                                    resize_mode=resize_mode)
+
+  def get_support_indices(self, index, sequence):
+    if index == 0:
+      support_indices = np.repeat([index], self.temporal_window)
+    elif (index - self.temporal_window) < 0:
+      support_indices = np.repeat([0], abs(index - self.temporal_window + 1))
+      support_indices = np.append(support_indices, np.array([index-1, index]))
+      indices_to_sample = np.array(range((index - self.temporal_window), index-1))
+      indices_to_sample = indices_to_sample[indices_to_sample>=0]
+      support_indices = np.append(support_indices, indices_to_sample)
+      support_indices.sort()
+    else:
+      support_indices = np.array([0])
+      support_indices = np.append(support_indices, np.array(list(range(index - self.temporal_window + 2, index + 1))))
+      # max frames that could be sampled based on the temporal window
+      # max_frames_tw = int(self.temporal_window - (index // self.temporal_window) - 2)
+      # if max_frames_tw > 0:
+        # sample previous frames if enough support frames with the required temporal gap are not available.
+        # support_indices = np.append(support_indices, list(range((index - max_frames_tw - 1), index - 1)))
+
+      # for i in range(self.temporal_window - len(support_indices)):
+        #support_indices = np.append(support_indices, np.array([index - (self.temporal_window * (i+1))]))
+        # support_indices = np.append(support_indices, np.array([(self.temporal_window * i)]))
+
+      support_indices.sort()
+
+    # print("support indices are {}".format(support_indices))
+    return np.abs(support_indices)
+
+  def __getitem__(self, index):
+    input_dict = super(DAVISInfer, self).__getitem__(index)
+    support_indices = self.get_support_indices(index, input_dict['info']['name'])
+    input_dict['info']['support_indices'] = support_indices
+    return input_dict
 
 
 

@@ -34,12 +34,23 @@ class Encoder(nn.Module):
           p.requires_grad = False
 
   def forward(self, in_f, in_p):
+    assert in_f is not None or in_p is not None
     f = (in_f - self.mean) / self.std
-    p = in_p.float()
-    if len(in_p.shape) < 4:
-      p = torch.unsqueeze(in_p, dim=1).float()  # add channel dim
 
-    x = self.conv1(f) + self.conv1_p(p)  # + self.conv1_n(n)
+    if in_f is None:
+      p = in_p.float()
+      if len(in_p.shape) < 4:
+        p = torch.unsqueeze(in_p, dim=1).float()  # add channel dim
+
+      x = self.conv1_p(p)
+    elif in_p is not None:
+      p = in_p.float()
+      if len(in_p.shape) < 4:
+        p = torch.unsqueeze(in_p, dim=1).float()  # add channel dim
+
+      x = self.conv1(f) + self.conv1_p(p)  # + self.conv1_n(n)
+    else:
+      x = self.conv1(f)
     x = self.bn1(x)
     c1 = self.relu(x)  # 1/2, 64
     x = self.maxpool(c1)  # 1/4, 64
@@ -86,6 +97,7 @@ class Decoder(nn.Module):
     p = F.upsample(p2, scale_factor=4, mode='bilinear')
 
     return p, p2, p3, p4, p5
+
 
 class RGMP(BaseNetwork):
   def __init__(self):
