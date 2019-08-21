@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torchvision import models
 
 from network.Modules import GC, SoftmaxSimilarity
 from network.RGMP import Encoder, Decoder
@@ -14,6 +15,52 @@ class EncoderWG(Encoder):
 
   def forward(self, in_f, in_p):
     super(EncoderWG, self).forward(in_f, in_p)
+
+
+class Encoder101(Encoder):
+  def __init__(self):
+    super(Encoder101, self).__init__()
+    resnet = models.segmentation.fcn_resnet101(pretrained=True)
+    self.resnet = resnet
+    self.conv1 = resnet.backbone.conv1
+    self.bn1 = resnet.backbone.bn1
+    self.relu = resnet.backbone.relu  # 1/2, 64
+    self.maxpool = resnet.backbone.maxpool
+
+    self.res2 = resnet.backbone.layer1  # 1/4, 256
+    self.res3 = resnet.backbone.layer2  # 1/8, 512
+    self.res4 = resnet.backbone.layer3  # 1/16, 1024
+    self.res5 = resnet.backbone.layer4  # 1/32, 2048
+
+  def forward(self, in_f, in_p):
+    assert in_f is not None or in_p is not None
+    f = (in_f - self.mean) / self.std
+
+    if in_f is None:
+      p = in_p.float()
+      if len(in_p.shape) < 4:
+        p = torch.unsqueeze(in_p, dim=1).float()  # add channel dim
+
+      x = self.conv1_p(p)
+    elif in_p is not None:
+      p = in_p.float()
+      if len(in_p.shape) < 4:
+        p = torch.unsqueeze(in_p, dim=1).float()  # add channel dim
+
+      x = self.conv1(f) + self.conv1_p(p)  # + self.conv1_n(n)
+    else:
+      x = self.conv1(f)
+    x = self.bn1(x)
+    c1 = self.relu(x)  # 1/2, 64
+    x = self.maxpool(c1)  # 1/4, 64
+    r2 = self.res2(x)  # 1/4, 64
+    r3 = self.res3(r2)  # 1/8, 128
+    r4 = self.res4(r3)
+    r4 = self.maxpool(r4)# 1/16, 256
+    r5 = self.res5(r4)
+    r5 = self.maxpool(r5)# 1/32, 512
+
+    return r5, r4, r3, r2
 
 
 class Decoder3d(Decoder):
@@ -78,6 +125,11 @@ class DecoderSM(Decoder3d):
     p = F.interpolate(p2, scale_factor=4, mode='bilinear')
 
     return p, p2, p3, p4, p5
+
+
+class DecoderPredictTemporal(DecoderSM):
+  def __init__(self, tw=5):
+    super(DecoderPredictTemporal, self).__init__(tw)
 
 
 class TemporalNet(BaseNetwork):
@@ -168,7 +220,7 @@ class FeatureAgg3d(BaseNetwork):
 
 
 class FeatureAgg3dMergeTemporal(BaseNetwork):
-  def __init__(self):
+  def __init__(self, tw=5):
     super(FeatureAgg3dMergeTemporal, self).__init__()
     self.encoder = Encoder()
     self.decoder = Decoder3dMergeTemporal()
@@ -183,7 +235,15 @@ class FeatureAgg3dTemporalAssociation(BaseNetwork):
 
 class FeatureAgg3dMulti(BaseNetwork):
   def __init__(self, tw=5):
-    super(FeatureAgg3dMulti, self).__init__()
+    super(FeatureAgg3dMulti, self).__init__(tw=tw)
     self.encoder = Encoder()
     self.encoder2 = Encoder()
-    self.decoder = DecoderSM()
+    self.decoder = DecoderSM(tw=tw)
+
+
+class FeatureAgg3dMulti101(BaseNetwork):
+  def __init__(self, tw=5):
+    super(FeatureAgg3dMulti101, self).__init__(tw=tw)
+    self.encoder = Encoder101()
+    self.encoder2 = Encoder101()
+    self.decoder = DecoderSM(tw=tw)

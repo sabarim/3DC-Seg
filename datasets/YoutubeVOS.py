@@ -35,18 +35,6 @@ class YoutubeVOSDataset(DAVIS):
     start = time.time()
     pool = mp.Pool(10)
     results = [pool.apply(self.video_list, args=(line,)) for line in _imset_f]
-    # for line in _imset_f:
-    #   _video = line.split("/")[-1]
-    #   self.videos.append(_video)
-    #   self.num_frames[_video] = len(glob.glob(os.path.join(self.image_dir, _video, '*.jpg')))
-    #   mask_files = glob.glob(os.path.join(self.mask_dir, _video, '*.png'))
-    #   if len(mask_files) == 0:
-    #     mask_files = glob.glob(os.path.join(self.mask_dir.replace("CleanedAnnotations", "Annotations"), _video, '*.png'))
-    #   n_objects = [np.max(np.array(Image.open(f).convert("P")))
-    #                for f in mask_files]
-    #   self.num_objects[_video] = np.max(n_objects)
-    #   self.shape[_video] = np.shape(np.array(Image.open(mask_files[0]).convert("P")))
-    #   self.img_list += list(glob.glob(os.path.join(self.image_dir, _video, '*.jpg')))
     results = np.array(results)
     self.videos = results[:, 0]
     self.img_list = np.concatenate(results[:, 1])
@@ -119,4 +107,5 @@ class YoutubeVOSDataset(DAVIS):
       support_indices = np.append(support_indices, np.array([index, sample_list[-1]]))
 
     support_indices.sort()
+    print("support indices are {}".format(support_indices))
     return support_indices.astype(np.int)

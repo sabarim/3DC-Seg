@@ -19,10 +19,11 @@ def load_weights(model, optimizer, loadepoch, model_dir, scheduler):
       print('Loading checkpoint {}@Epoch {}{}...'.format(font.BOLD, loadepoch, font.END))
       if loadepoch == '0':
         # transform, checkpoint provided by RGMP
-        load_name = 'weights.pth'
+        load_name = 'saved_models/rgmp.pth'
         state = model.state_dict()
         checkpoint = torch.load(load_name)
-        checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
+        # checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
+        checkpoint = {"model": OrderedDict([(k.lower(), v) for k, v in checkpoint.items()])}
         checkpoint['epoch'] = 0
       else:
         load_name = os.path.join(model_dir,
@@ -34,6 +35,8 @@ def load_weights(model, optimizer, loadepoch, model_dir, scheduler):
 
       checkpoint_valid = {k: v for k, v in checkpoint['model'].items() if k in state and state[k].shape == v.shape}
       missing_keys = np.setdiff1d(list(state.keys()),list(checkpoint_valid.keys()))
+      if len(missing_keys) > 0:
+        print("WARN: some keys are found missing in the loaded model weights.")
       for key in missing_keys:
         checkpoint_valid[key] = state[key]
 

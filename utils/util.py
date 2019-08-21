@@ -14,6 +14,16 @@ def ToLabel(E):
   return fgs.astype(np.uint8)
 
 
+def get_iou(gt, pred):
+  i = np.logical_and(pred > 0, gt > 0).sum()
+  u = np.logical_or(pred > 0, gt > 0).sum()
+  if u == 0:
+    iou = 1.0
+  else:
+    iou = i / u
+  return iou
+
+
 def iou_fixed(pred, gt, exclude_last=False):
   pred = ToLabel(pred)
   ious = []

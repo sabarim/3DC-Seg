@@ -24,6 +24,12 @@ def parse_args():
   parser.add_argument('--results_path', dest='results_path',
                       help='path to save results',
                       default=None, type=str)
+  parser.add_argument('--save_results', dest='save_results',
+                      help='save predictions during inference',
+                      default=False, type=bool)
+  parser.add_argument('--proposal_dir', dest='proposal_dir',
+                      help='path to proposals',
+                      default="results/converted_proposals/thresh-0/", type=str)
   parser.add_argument('--remove_gt_proposal', dest='remove_gt_proposal',
                       help='remove the gt proposal randomly',
                       default=False, type=bool)
@@ -54,6 +60,13 @@ def parse_args():
   parser.add_argument('--test_dataset', dest='test_dataset',
                       help='test dataset',
                       default="davis", type=str)
+  parser.add_argument('--tw', dest='tw',
+                      help='temporal window size',
+                      default=5, type=int)
+  parser.add_argument('--augmentors', dest='augmentors',
+                      help='augmentors to use',
+                      nargs='*',
+                      default=None, type=str)
 
   # BPTT
   parser.add_argument('--bptt', dest='bptt_len',
