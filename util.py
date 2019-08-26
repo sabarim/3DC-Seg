@@ -2,7 +2,9 @@ import cv2
 import numpy as np
 import torch
 from PIL import Image
+
 from lib import cv2_util
+from utils.util import get_iou
 
 
 def color_map(N=256, normalized=False):
@@ -204,3 +206,50 @@ def top_n_predictions_maskrcnn(predictions, n):
     # scores = predictions["scores"]
     # _, idx = scores.sort(0, descending=True)
     return predictions
+
+
+def filter_by_category(predictions, filter_cats):
+    """
+    Filter proposals by category
+
+    Arguments:
+        predictions (dictionary): the result of the computation by the model.
+            It should contain the field 'labels'.
+
+    Returns:
+        prediction (dictionary): the detected objects. Additional information
+            of the detection properties can be found in the fields of
+            the BoxList via `prediction.fields()`
+    """
+    cats = predictions["labels"]
+    keep = np.zeros_like(cats).astype(np.bool)
+    filtered_predictions = {}
+    for cat in filter_cats:
+        keep[(cats == cat).data.cpu().numpy()] = True
+    filtered_predictions.update({key: predictions[key][keep] for key in predictions.keys()})
+    return filtered_predictions
+
+
+def create_object_id_mapping(ref_mask, proposals):
+  ids = np.setdiff1d(np.unique(ref_mask), [0])
+  result = {}
+  for id in ids:
+    _, target_id = get_best_overlap((ref_mask == id).astype(np.uint8), proposals)
+    result[id] = target_id
+
+  return result
+
+
+def get_best_overlap(ref_obj, proposals):
+    best_iou = 0
+    target_id = -1
+    # mask = proposals[:, 0].cuda()
+
+    for obj_id in range(len(proposals)):
+        iou = get_iou(ref_obj, proposals[obj_id].astype(np.uint8))
+        if iou > best_iou and iou > 0.1:
+            best_iou = iou
+            target_id = obj_id
+            # mask = (proposals[:, 0] == obj_id).int().cuda()
+
+    return best_iou, target_id
