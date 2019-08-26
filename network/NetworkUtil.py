@@ -26,7 +26,8 @@ def propagateMultiEncoder(model, inputs, ref_mask, proposals):
     refs+=[r5.unsqueeze(2)]
   # forward the current mask with a separate encoder
   encoderCurr = nn.DataParallel(model.module.encoder2)
-  r5, r4, r3, r2 = encoderCurr(inputs[:, :, -1], proposals[:, :, -1])
+  # r5, r4, r3, r2 = encoderCurr(inputs[:, :, -1], proposals[:, :, -1])
+  r5, r4, r3, r2 = encoderCurr(inputs[:, :, -1], None)
   support = torch.cat(refs, dim=2)
   decoder = nn.DataParallel(model.module.decoder)
   e2 = decoder(r5, r4, r3, r2, support)

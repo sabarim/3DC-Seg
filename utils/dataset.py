@@ -1,9 +1,15 @@
 from datasets.DAVIS import DAVIS, DAVISEval, DAVISInfer
+from datasets.DAVISProposalGuidance import DAVISProposalGuidance
 from datasets.YoutubeVOS import YoutubeVOSDataset
 from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT
 
 
 def get_dataset(args):
+  if args.train_dataset == "davis_proposal_guidance":
+    trainset = DAVISProposalGuidance(DAVIS_ROOT, imset='2017/train.txt', is_train=True,
+                     random_instance=args.random_instance, crop_size=args.crop_size, resize_mode=args.resize_mode,
+                     max_temporal_gap=12, temporal_window=args.tw, augmentors=args.augmentors,
+                     proposal_dir=args.proposal_dir)
   if args.train_dataset == "davis":
     trainset = DAVIS(DAVIS_ROOT, imset='2017/train.txt', is_train=True,
                      random_instance=args.random_instance, crop_size=args.crop_size, resize_mode=args.resize_mode,

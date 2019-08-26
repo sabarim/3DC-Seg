@@ -12,6 +12,7 @@ from torch.utils.data import DataLoader, RandomSampler
 from inference_handlers.inference import infer
 from network.FeatureAgg3d import FeatureAgg3d, FeatureAgg3dMergeTemporal
 from network.NetworkUtil import run_forward
+from network.RGMP import Encoder
 from network.models import BaseNetwork
 from utils.Argparser import parse_args
 # Constants
@@ -29,7 +30,8 @@ MASK_CHANGE_THRESHOLD = 1000
 BBOX_CROP = True
 BEST_IOU=0
 
-network_models = {0:"RGMP", 1:"FeatureAgg3d", 2: "FeatureAgg3dMergeTemporal", 3: "FeatureAgg3dMulti"}
+network_models = {0:"RGMP", 1:"FeatureAgg3d", 2: "FeatureAgg3dMergeTemporal", 3: "FeatureAgg3dMulti",
+                  4: "FeatureAgg3dMulti101"}
 palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
 
 
@@ -50,6 +52,8 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
     losses.update(loss.item(), input.size(0))
     foo.add_scalar("data/loss", loss, count)
     foo.add_scalar("data/iou", iou, count)
+    if "proposals" in input_dict:
+      foo.add_images("data/proposals", input_dict['proposals'][:, :, -1].repeat(1, 3, 1, 1), count)
     if args.show_image_summary:
       show_image_summary(count, foo, input_var, masks_guidance, target, output)
 
@@ -85,7 +89,7 @@ def forward(criterion, input_dict, ious, model):
   masks_guidance = masks_guidance.float().cuda()
   input_var = input.float().cuda()
   # compute output
-  pred = run_forward(model, input_var, masks_guidance, args)
+  pred = run_forward(model, input_var, masks_guidance, input_dict['proposals'])
   pred = F.interpolate(pred[0], target.shape[2:], mode="bilinear")
   # output = F.sigmoid(pred[:, -1])
   # output = F.softmax(pred, dim=1)
@@ -163,7 +167,7 @@ if __name__ == '__main__':
 
     model_classes = all_subclasses(BaseNetwork)
     class_index = [cls.__name__ for cls in model_classes].index(network_models[args.network])
-    model = list(model_classes)[class_index]()
+    model = list(model_classes)[class_index](args.tw)
     # model = FeatureAgg3dMergeTemporal()
     print("Using model: {}".format(model.__class__), flush=True)
     print(args)
@@ -197,7 +201,9 @@ if __name__ == '__main__':
       # best_loss = best_loss_train
       # best_iou = best_iou_train
       if args.freeze_bn:
-        model.encoder.freeze_batchnorm()
+        encoders = [module for module in model.modules() if isinstance(module, Encoder)]
+        for encoder in encoders:
+          encoder.freeze_batchnorm()
       for epoch in range(start_epoch, args.num_epochs):
         loss_mean, iou_mean  = train(trainloader, model, criterion, optimizer, epoch, writer)
         for lr_scheduler in lr_schedulers:
@@ -221,7 +227,7 @@ if __name__ == '__main__':
     elif args.task == 'eval':
       validate(testloader, model, criterion, 1, writer)
     elif 'infer' in args.task:
-      infer(args.task, testloader, model, criterion, writer)
+      infer(args, testloader, model, criterion, writer)
     else:
       raise ValueError("Unknown task {}".format(args.task))
 
