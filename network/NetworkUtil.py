@@ -35,8 +35,18 @@ def propagateMultiEncoder(model, inputs, ref_mask, proposals):
   return (F.softmax(e2[0], dim=1), r5, e2[-1])
 
 
+def propagate3d(model, inputs, ref_mask, proposals):
+  refs = []
+  assert inputs.shape[2] >= 2
+  e2 = model(inputs, ref_mask)
+
+  return (F.softmax(e2[0], dim=1), e2[-1], e2[-2])
+
+
 def run_forward(model, inputs, ref_masks, proposals):
   if 'multi' in str(model.module.__class__).lower():
     return propagateMultiEncoder(model, inputs, ref_masks, proposals)
+  elif 'resnet3d' in str(model.module.__class__).lower():
+    return propagate3d(model, inputs, ref_masks, proposals)
   else:
     return propagate(model, inputs, ref_masks)

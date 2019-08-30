@@ -47,7 +47,7 @@ def parse_args():
                       default=None, type=int)
   parser.add_argument('--resize_mode_eval', dest='resize_mode_eval',
                       help='resize mode',
-                      default="fixed_size", type=str)
+                      default="unchanged", type=str)
   parser.add_argument('--data_sample', dest='data_sample',
                       help='number of data samples',
                       default=None, type=int)

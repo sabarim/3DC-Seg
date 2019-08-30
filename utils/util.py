@@ -65,5 +65,9 @@ def show_image_summary(count, foo, input_var, masks_guidance, target, pred):
     foo.add_images("data/input" + str(index), input_var[:, :3, index], count)
     foo.add_images("data/guidance" + str(index), masks_guidance[:, :, index].repeat(1, 3, 1, 1), count)
   # foo.add_image("data/loss_image", loss_image.unsqueeze(1), count)
-  foo.add_images("data/target", target.repeat(1,3,1,1), count)
-  foo.add_images("data/pred", torch.argmax(pred, dim=1).unsqueeze(1).repeat(1,3,1,1), count)
+  if len(target.shape) < 5:
+    target = target.unsqueeze(2)
+    pred = pred.unsqueeze(2)
+  for index in range(target.shape[2]):
+    foo.add_images("data/target"+ str(index), target[:, :, index].repeat(1,3,1,1), count)
+    foo.add_images("data/pred"+ str(index), torch.argmax(pred, dim=1)[:, index].unsqueeze(1).repeat(1,3,1,1), count)

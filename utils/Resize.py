@@ -12,6 +12,7 @@ class ResizeMode(Enum):
   FIXED_SIZE = "fixed_size"
   UNCHANGED = "unchanged"
   RANDOM_RESIZE_AND_CROP = "random_resize_and_crop"
+  RANDOM_RESIZE_AND_OBJECT_CROP = "random_resize_and_object_crop"
   BBOX_CROP_AND_RESIZE_FIXED_SIZE = "bbox_crop_and_resize_fixed_size"
   RESIZE_MIN_SHORT_EDGE_MAX_LONG_EDGE = "resize_min_short_edge_max_long_edge"
   FIXED_RESIZE_AND_CROP = "fixed_resize_and_crop"
@@ -22,11 +23,14 @@ class ResizeMode(Enum):
 
 
 def resize(tensors, resize_mode, size):
+  if resize_mode == ResizeMode.UNCHANGED:
+    return tensors
+
   crop_size = preprocess_size(size)
   if resize_mode == ResizeMode.RANDOM_RESIZE_AND_CROP:
     return random_resize_and_crop(tensors, crop_size)
-  elif resize_mode == ResizeMode.UNCHANGED:
-    return tensors
+  elif resize_mode == ResizeMode.RANDOM_RESIZE_AND_OBJECT_CROP:
+    return random_resize_and_object_crop(tensors, crop_size)
   elif resize_mode == ResizeMode.FIXED_SIZE:
     return resize_fixed_size(tensors, crop_size)
   elif resize_mode == ResizeMode.RESIZE_SHORT_EDGE:
@@ -47,8 +51,14 @@ def bilinear_resize(tensors, size):
 
 
 def random_resize_and_crop(tensors, size):
-  tensors_resized = resize_random_scale_with_min_size(tensors, min_size=size[0])
+  tensors_resized = resize_random_scale_with_min_size(tensors, min_size=min(size))
   tensors_resized = random_crop_tensors(tensors_resized, size)
+  return tensors_resized
+
+
+def random_resize_and_object_crop(tensors, size):
+  tensors_resized = resize_random_scale_with_min_size(tensors, min_size=min(size))
+  tensors_resized = random_object_crop_tensors(tensors_resized, size)
   return tensors_resized
 
 
@@ -111,6 +121,32 @@ def random_crop_tensors(tensors, crop_size):
                            left: left + new_w]
 
   return tensors_cropped
+
+
+def random_object_crop_tensors(tensors, crop_size):
+  assert "image" in tensors and 'mask' in tensors
+  h, w = tensors["image"].shape[:2]
+  new_h, new_w = crop_size
+  obj_h_max = np.max(np.where(tensors['mask'] != 0)[0]) if tensors['mask'].sum() > 0 else 0
+  obj_h_min = np.min(np.where(tensors['mask'] != 0)[0]) if tensors['mask'].sum() > 0 else 0
+  obj_w_max = np.max(np.where(tensors['mask'] != 0)[1]) if tensors['mask'].sum() > 0 else 0
+  obj_w_min = np.max(np.where(tensors['mask'] != 0)[1]) if tensors['mask'].sum() > 0 else 0
+
+  top_lower_bound = max(0, obj_h_max - new_h)
+  left_lower_bound = max(0, obj_w_max - new_w)
+  top_upper_bound = min(max(0, (h - new_h)), obj_h_min)
+  left_upper_bound = min(max(0, w - new_w), obj_w_min)
+
+  top = int(random.uniform(top_lower_bound, top_upper_bound))
+  left = int(random.uniform(left_lower_bound, left_upper_bound))
+
+  tensors_cropped = {}
+  for key in tensors.keys():
+    tensors_cropped[key] = tensors[key][top: top + new_h,
+                           left: left + new_w]
+
+  return tensors_cropped
+
 
 
 def resize_fixed_size(tensors, size):

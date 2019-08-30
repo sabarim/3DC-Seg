@@ -11,6 +11,7 @@ from torch.utils.data import DataLoader, RandomSampler
 
 from inference_handlers.inference import infer
 from network.FeatureAgg3d import FeatureAgg3d, FeatureAgg3dMergeTemporal
+from network.Resnet3dAgg import Resnet3d
 from network.NetworkUtil import run_forward
 from network.RGMP import Encoder
 from network.models import BaseNetwork
@@ -31,7 +32,7 @@ BBOX_CROP = True
 BEST_IOU=0
 
 network_models = {0:"RGMP", 1:"FeatureAgg3d", 2: "FeatureAgg3dMergeTemporal", 3: "FeatureAgg3dMulti",
-                  4: "FeatureAgg3dMulti101"}
+                  4: "FeatureAgg3dMulti101", 5: "Resnet3d"}
 palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
 
 
@@ -52,9 +53,9 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
     losses.update(loss.item(), input.size(0))
     foo.add_scalar("data/loss", loss, count)
     foo.add_scalar("data/iou", iou, count)
-    if "proposals" in input_dict:
-      foo.add_images("data/proposals", input_dict['proposals'][:, :, -1].repeat(1, 3, 1, 1), count)
     if args.show_image_summary:
+      if "proposals" in input_dict:
+        foo.add_images("data/proposals", input_dict['proposals'][:, :, -1].repeat(1, 3, 1, 1), count)
       show_image_summary(count, foo, input_var, masks_guidance, target, output)
 
     # compute gradient and do SGD step
@@ -90,7 +91,10 @@ def forward(criterion, input_dict, ious, model):
   input_var = input.float().cuda()
   # compute output
   pred = run_forward(model, input_var, masks_guidance, input_dict['proposals'])
-  pred = F.interpolate(pred[0], target.shape[2:], mode="bilinear")
+  if len(pred[0].shape) > 4:
+    pred = F.interpolate(pred[0], target.shape[2:], mode="trilinear")
+  else:
+    pred = F.interpolate(pred[0], target.shape[2:], mode="bilinear")
   # output = F.sigmoid(pred[:, -1])
   # output = F.softmax(pred, dim=1)
   loss_image = criterion(pred[:, -1], target.squeeze(1).cuda().float())
