@@ -84,10 +84,13 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
 def forward(criterion, input_dict, ious, model):
   input = input_dict["images"]
   target = input_dict["target"]
-  masks_guidance = input_dict["masks_guidance"]
+  if 'masks_guidance' in input_dict:
+    masks_guidance = input_dict["masks_guidance"]
+    masks_guidance = masks_guidance.float().cuda()
+  else:
+    masks_guidance = None
   info = input_dict["info"]
   # data_time.update(time.time() - end)
-  masks_guidance = masks_guidance.float().cuda()
   input_var = input.float().cuda()
   # compute output
   pred = run_forward(model, input_var, masks_guidance, input_dict['proposals'])

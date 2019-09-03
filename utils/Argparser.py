@@ -37,13 +37,13 @@ def parse_args():
                       help='freeze batch normalisation layers',
                       default=False, type=bool)
   parser.add_argument('--crop_size', dest='crop_size',
-                      help='image crop size',
+                      help='image crop size', nargs = '+',
                       default=None, type=int)
   parser.add_argument('--resize_mode', dest='resize_mode',
                       help='resize mode',
                       default="fixed_size", type=str)
   parser.add_argument('--crop_size_eval', dest='crop_size_eval',
-                      help='image crop size',
+                      help='image crop size', nargs = '+',
                       default=None, type=int)
   parser.add_argument('--resize_mode_eval', dest='resize_mode_eval',
                       help='resize mode',

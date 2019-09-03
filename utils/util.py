@@ -63,7 +63,8 @@ def get_lr_schedulers(optimiser, args, last_epoch=-1):
 def show_image_summary(count, foo, input_var, masks_guidance, target, pred):
   for index in range(input_var.shape[2]):
     foo.add_images("data/input" + str(index), input_var[:, :3, index], count)
-    foo.add_images("data/guidance" + str(index), masks_guidance[:, :, index].repeat(1, 3, 1, 1), count)
+    if masks_guidance is not None:
+      foo.add_images("data/guidance" + str(index), masks_guidance[:, :, index].repeat(1, 3, 1, 1), count)
   # foo.add_image("data/loss_image", loss_image.unsqueeze(1), count)
   if len(target.shape) < 5:
     target = target.unsqueeze(2)

@@ -205,8 +205,8 @@ class DAVIS(data.Dataset):
     th_masks[-1] = np.zeros_like(th_masks[-1])
     masks_guidance = np.concatenate(th_masks, axis=1)
     # remove masks with some probability to make sure that the network can focus on intermediate frames
-    if self.is_train and np.random.choice([True, False], 1, p=[0.15,0.85]):
-      masks_guidance[0, -2] = np.zeros(masks_guidance.shape[2:])
+    # if self.is_train and np.random.choice([True, False], 1, p=[0.15,0.85]):
+    #   masks_guidance[0, -2] = np.zeros(masks_guidance.shape[2:])
     return {'images': np.concatenate(th_frames, axis=1), 'masks_guidance':masks_guidance, 'info': info,
             'target': target, "proposals": np.concatenate(th_proposals, axis=1), "raw_proposals": raw_proposals,
             'raw_masks': np.concatenate(th_masks_raw, axis=1)}

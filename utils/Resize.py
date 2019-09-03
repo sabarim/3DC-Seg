@@ -13,6 +13,7 @@ class ResizeMode(Enum):
   UNCHANGED = "unchanged"
   RANDOM_RESIZE_AND_CROP = "random_resize_and_crop"
   RANDOM_RESIZE_AND_OBJECT_CROP = "random_resize_and_object_crop"
+  RESIZE_AND_OBJECT_CROP = "resize_and_object_crop"
   BBOX_CROP_AND_RESIZE_FIXED_SIZE = "bbox_crop_and_resize_fixed_size"
   RESIZE_MIN_SHORT_EDGE_MAX_LONG_EDGE = "resize_min_short_edge_max_long_edge"
   FIXED_RESIZE_AND_CROP = "fixed_resize_and_crop"
@@ -31,6 +32,8 @@ def resize(tensors, resize_mode, size):
     return random_resize_and_crop(tensors, crop_size)
   elif resize_mode == ResizeMode.RANDOM_RESIZE_AND_OBJECT_CROP:
     return random_resize_and_object_crop(tensors, crop_size)
+  elif resize_mode == ResizeMode.RESIZE_AND_OBJECT_CROP:
+    return resize_and_object_crop(tensors, crop_size)
   elif resize_mode == ResizeMode.FIXED_SIZE:
     return resize_fixed_size(tensors, crop_size)
   elif resize_mode == ResizeMode.RESIZE_SHORT_EDGE:
@@ -61,6 +64,11 @@ def random_resize_and_object_crop(tensors, size):
   tensors_resized = random_object_crop_tensors(tensors_resized, size)
   return tensors_resized
 
+def resize_and_object_crop(tensors, size):
+  tensors_resized = resize_random_scale_with_min_size(tensors, min_size=min(size))
+  tensors_resized = random_object_crop_tensors(tensors_resized, size)
+  return tensors_resized
+
 
 def resize_short_edge_and_crop(tensors, size):
   tensors_resized = resize_short_edge_to_fixed_size(tensors, size)
@@ -73,7 +81,7 @@ def preprocess_size(size):
   size = tuple([size]) if isinstance(size, int) else tuple(size)
   assert len(size) in (1, 2)
   if len(size) == 2:
-    assert size[0] == size[1]
+    # assert size[0] == size[1]
     crop_size = size
   else:
     crop_size = [size[0], size[0]]
@@ -92,6 +100,19 @@ def resize_random_scale_with_min_size(tensors, min_size, min_scale=0.7, max_scal
   max_scale = np.max([max_scale, min_scale_factor])
   scale_factor = random.uniform(min_scale, max_scale)
   scaled_size = np.around(np.array(img.shape[:2]) * scale_factor).astype(np.int)
+  tensors_out = resize_fixed_size(tensors, scaled_size)
+  return tensors_out
+
+
+def scale_with_min_size(tensors, min_size, min_scale=0.7, max_scale=1.3):
+  assert min_size is not None
+  img = tensors["image"]
+
+  h = img.shape[0]
+  w = img.shape[1]
+  shorter_side = np.min([h, w])
+  min_scale_factor = float(min_size) / float(shorter_side)
+  scaled_size = np.around(np.array(img.shape[:2]) * min_scale_factor).astype(np.int)
   tensors_out = resize_fixed_size(tensors, scaled_size)
   return tensors_out
 
