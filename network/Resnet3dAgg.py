@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+
 from network.Modules import GC3d, Refine3d
 from network.Resnet3d import resnet50
 from network.models import BaseNetwork
@@ -13,15 +14,17 @@ class Encoder3d(nn.Module):
                              padding=(3, 3, 3), bias=False)
 
     resnet = resnet50(sample_size = sample_size, sample_duration = tw)
+    self.resnet = resnet
     self.conv1 = resnet.conv1
     self.bn1 = resnet.bn1
     self.relu = resnet.relu  # 1/2, 64
-    self.maxpool = resnet.maxpool
+    # self.maxpool = resnet.maxpool
+    self.maxpool = nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(1,2,2), padding=(0,1,1))
 
-    self.res2 = resnet.layer1  # 1/4, 256
-    self.res3 = resnet.layer2  # 1/8, 512
-    self.res4 = resnet.layer3  # 1/16, 1024
-    self.res5 = resnet.layer4  # 1/32, 2048
+    self.layer1 = resnet.layer1  # 1/4, 256
+    self.layer2 = resnet.layer2  # 1/8, 512
+    self.layer3 = resnet.layer3  # 1/16, 1024
+    self.layer4 = resnet.layer4  # 1/32, 2048
 
     self.register_buffer('mean', torch.FloatTensor([114.7748, 107.7354, 99.4750]).view(1, 3, 1, 1, 1))
     self.register_buffer('std', torch.FloatTensor([1, 1, 1]).view(1, 3, 1, 1, 1))
@@ -54,10 +57,10 @@ class Encoder3d(nn.Module):
     x = self.bn1(x)
     c1 = self.relu(x)  # 1/2, 64
     x = self.maxpool(c1)  # 1/4, 64
-    r2 = self.res2(x)  # 1/4, 64
-    r3 = self.res3(r2)  # 1/8, 128
-    r4 = self.res4(r3)  # 1/16, 256
-    r5 = self.res5(r4)  # 1/32, 512
+    r2 = self.layer1(x)  # 1/4, 64
+    r3 = self.layer2(r2)  # 1/8, 128
+    r4 = self.layer3(r3)  # 1/16, 256
+    r5 = self.layer4(r4)  # 1/32, 512
 
     return r5, r4, r3, r2
 
@@ -109,3 +112,20 @@ class Resnet3d(BaseNetwork):
     r5, r4, r3, r2 = self.encoder.forward(x, ref)
     p, p2, p3, p4, p5 = self.decoder.forward(r5, r4, r3, r2, None)
     return p, p2, p3, p4, p5, r5
+
+
+class Resnet3dPredictOne(BaseNetwork):
+  def __init__(self, tw=16, sample_size=112):
+    super(Resnet3dPredictOne, self).__init__()
+    self.encoder = Encoder3d(tw, sample_size)
+    self.encoder.maxpool = self.encoder.resnet.maxpool
+    self.convG1 = nn.Conv2d(2048, 512, kernel_size=3, padding=1)
+    self.convG2 = nn.Conv2d(512, 256, kernel_size=3, padding=1)
+    self.pred = nn.Conv2d(256, 2, kernel_size=3, padding=1, stride=1)
+
+  def forward(self, x, ref):
+    r5, r4, r3, r2 = self.encoder.forward(x, ref)
+    p = self.convG1(F.relu(r5[:, :, -1]))
+    p = self.convG2(F.relu(p))
+    p = self.pred(p)
+    return p, None, None, None, None, r5

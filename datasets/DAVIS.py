@@ -230,8 +230,9 @@ class DAVIS(data.Dataset):
       if len(sample_indices) >= num_indices:
         support_indices = np.append(support_indices, np.random.choice(sample_indices, num_indices, replace=False))
       else:
-        support_indices = np.append(np.repeat([max(0, index-1)], self.temporal_window - len(support_indices)),
-                                    support_indices)
+        support_indices = np.append(support_indices, np.random.choice(sample_indices, num_indices, replace=True))
+        # support_indices = np.append(np.repeat([max(0, index-1)], self.temporal_window - len(support_indices)),
+        #                             support_indices)
     support_indices.sort()
     # print(index, support_indices)
     return support_indices.astype(np.int)

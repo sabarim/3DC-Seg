@@ -1,5 +1,5 @@
 from datasets.DAVIS import DAVIS, DAVISEval, DAVISInfer
-from datasets.DAVIS16 import DAVIS16Eval, DAVIS16
+from datasets.DAVIS16 import DAVIS16Eval, DAVIS16, DAVIS16PredictOne, DAVIS16PredictOneEval
 from datasets.DAVIS3d import DAVIS3d, DAVIS3dEval
 from datasets.DAVISProposalGuidance import DAVISProposalGuidance, DAVISProposalGuidanceEval, DAVISProposalGuidanceInfer
 from datasets.YoutubeVOS import YoutubeVOSDataset
@@ -12,6 +12,13 @@ def get_dataset(args):
                      random_instance=args.random_instance, crop_size=args.crop_size, resize_mode=args.resize_mode,
                      max_temporal_gap=12, temporal_window=args.tw, augmentors=args.augmentors,
                      proposal_dir=args.proposal_dir)
+  elif args.train_dataset == "davis16_last":
+    trainset = DAVIS16PredictOne(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
+                       temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir)
+  elif args.train_dataset == "davis16_centre":
+    trainset = DAVIS16PredictOne(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
+                       temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
+                                 predict_centre=True)
   elif args.train_dataset == "davis16":
     trainset = DAVIS16(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
                      temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir)
@@ -41,6 +48,13 @@ def get_dataset(args):
     testset = DAVISProposalGuidanceEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=args.random_instance,
                                         crop_size=args.crop_size_eval, resize_mode=args.resize_mode_eval,
                                         temporal_window=args.tw, proposal_dir=args.proposal_dir)
+  elif "davis16_last" in args.test_dataset:
+    testset = DAVIS16PredictOneEval(DAVIS_ROOT, crop_size=args.crop_size_eval,
+                        resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir)
+  elif "davis16_centre" in args.test_dataset:
+    testset = DAVIS16PredictOneEval(DAVIS_ROOT, crop_size=args.crop_size_eval,
+                        resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir,
+                                    predict_centre = True)
   elif "davis16" in args.test_dataset:
     testset = DAVIS16Eval(DAVIS_ROOT, crop_size=args.crop_size_eval,
                         resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir)
