@@ -63,6 +63,9 @@ def parse_args():
   parser.add_argument('--tw', dest='tw',
                       help='temporal window size',
                       default=5, type=int)
+  parser.add_argument('--max_temporal_gap', dest='max_temporal_gap',
+                      help='maximum temporal gap relative to current frame from which the input clip should be sampled',
+                      default=5, type=int)
   parser.add_argument('--augmentors', dest='augmentors',
                       help='augmentors to use',
                       nargs='*',

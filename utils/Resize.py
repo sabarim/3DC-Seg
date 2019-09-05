@@ -40,6 +40,8 @@ def resize(tensors, resize_mode, size):
     return resize_short_edge_to_fixed_size(tensors, crop_size)
   elif resize_mode == ResizeMode.RESIZE_SHORT_EDGE_AND_CROP:
     return resize_short_edge_and_crop(tensors, crop_size)
+  elif resize_mode == ResizeMode.BBOX_CROP_AND_RESIZE_FIXED_SIZE:
+    return bbox_crop_and_resize_fixed_size(tensors, crop_size)
   else:
     assert False, ("resize mode not implemented yet", resize_mode)
 
@@ -183,3 +185,29 @@ def resize_fixed_size(tensors, size):
       #   tensors_resized[key] = cv2.resize(tensors_resized[key], tuple([size[1], size[0]]),
       #                                     interpolation = cv2.INTER_NEAREST)
   return tensors_resized
+
+
+def bbox_crop_and_resize_fixed_size(tensors, size):
+  MARGIN = 50
+  tensors_cropped = tensors.copy()
+
+  assert 'mask' in tensors
+  locations = np.where(tensors['mask'] != 0)
+  if len(locations[0]) > 0:
+    shape = tensors['mask'].shape
+    y0 = np.min(locations[0])
+    y1 = np.max(locations[0])
+    x0 = np.min(locations[1])
+    x1 = np.max(locations[1])
+
+    # add margin and clip to bounds
+    y0 = np.maximum(y0 - MARGIN, 0)
+    x0 = np.maximum(x0 - MARGIN, 0)
+    y1 = np.minimum(y1 + MARGIN, shape[0])
+    x1 = np.minimum(x1 + MARGIN, shape[1])
+
+    for key in tensors:
+      tensors_cropped[key] = tensors[key][y0:y1, x0:x1]
+
+  tensors_cropped = resize_fixed_size(tensors_cropped, size)
+  return tensors_cropped
