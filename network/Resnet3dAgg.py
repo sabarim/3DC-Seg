@@ -38,7 +38,8 @@ class Encoder3d(nn.Module):
 
   def forward(self, in_f, in_p):
     assert in_f is not None or in_p is not None
-    f = (in_f - self.mean) / self.std
+    f = (in_f * 255.0 - self.mean) / self.std
+    f /= 255.0
 
     if in_f is None:
       p = in_p.float()
@@ -102,6 +103,12 @@ class Decoder3d(nn.Module):
     return p, p2, p3, p4, p5
 
 
+class Decoder3dMaskGuidance(Decoder3d):
+  def __init__(self, tw=5):
+    super(Decoder3dMaskGuidance, self).__init__()
+    self.GC = GC3d(2049, 256)
+
+
 class Resnet3d(BaseNetwork):
   def __init__(self, tw=16, sample_size=112):
     super(Resnet3d, self).__init__()
@@ -109,7 +116,10 @@ class Resnet3d(BaseNetwork):
     self.decoder = Decoder3d()
 
   def forward(self, x, ref):
-    r5, r4, r3, r2 = self.encoder.forward(x, ref)
+    if ref is not None and len(ref.shape) == 4:
+      r5, r4, r3, r2 = self.encoder.forward(x, ref.unsqueeze(2))
+    else:
+      r5, r4, r3, r2 = self.encoder.forward(x, ref)
     p, p2, p3, p4, p5 = self.decoder.forward(r5, r4, r3, r2, None)
     return p, p2, p3, p4, p5, r5
 
@@ -129,3 +139,18 @@ class Resnet3dPredictOne(BaseNetwork):
     p = self.convG2(F.relu(p))
     p = self.pred(p)
     return p, None, None, None, None, r5
+
+
+class Resnet3dMaskGuidance(BaseNetwork):
+  def __init__(self, tw=16, sample_size=112):
+    super(Resnet3dMaskGuidance, self).__init__()
+    self.encoder = Encoder3d(tw, sample_size)
+    self.decoder = Decoder3dMaskGuidance()
+
+  def forward(self, x, ref):
+    r5, r4, r3, r2 = self.encoder.forward(x, None)
+    assert ref is not None
+    ref = F.upsample(ref, size=r5.shape[-2:], mode='nearest')
+    r5 = torch.cat((r5, ref.unsqueeze(1)), dim=1)
+    p, p2, p3, p4, p5 = self.decoder.forward(r5, r4, r3, r2, None)
+    return p, p2, p3, p4, p5, r5
