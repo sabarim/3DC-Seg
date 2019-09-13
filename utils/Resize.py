@@ -40,8 +40,6 @@ def resize(tensors, resize_mode, size):
     return resize_short_edge_to_fixed_size(tensors, crop_size)
   elif resize_mode == ResizeMode.RESIZE_SHORT_EDGE_AND_CROP:
     return resize_short_edge_and_crop(tensors, crop_size)
-  elif resize_mode == ResizeMode.BBOX_CROP_AND_RESIZE_FIXED_SIZE:
-    return bbox_crop_and_resize_fixed_size(tensors, crop_size)
   else:
     assert False, ("resize mode not implemented yet", resize_mode)
 
@@ -75,7 +73,7 @@ def resize_and_object_crop(tensors, size):
 def resize_short_edge_and_crop(tensors, size):
   tensors_resized = resize_short_edge_to_fixed_size(tensors, size)
   # TODO: the crop size is harcoded
-  tensors_resized = random_crop_tensors(tensors_resized, (256, 455))
+  tensors_resized = random_object_crop_tensors(tensors_resized, (224, 224))
   return tensors_resized
 
 
@@ -198,7 +196,7 @@ def bbox_crop_and_resize_fixed_size(tensors, size):
     y0 = np.min(locations[0])
     y1 = np.max(locations[0])
     x0 = np.min(locations[1])
-    x1 = np.max(locations[1])
+    x1 = np.min(locations[1])
 
     # add margin and clip to bounds
     y0 = np.maximum(y0 - MARGIN, 0)

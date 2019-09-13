@@ -32,7 +32,8 @@ BBOX_CROP = True
 BEST_IOU=0
 
 network_models = {0:"RGMP", 1:"FeatureAgg3d", 2: "FeatureAgg3dMergeTemporal", 3: "FeatureAgg3dMulti",
-                  4: "FeatureAgg3dMulti101", 5: "Resnet3d", 6: "Resnet3dPredictOne"}
+                  4: "FeatureAgg3dMulti101", 5: "Resnet3d", 6: "Resnet3dPredictOne", 7: "Resnet3dMaskGuidance",
+                  8: "SiamResnet3d"}
 palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
 
 
@@ -56,7 +57,7 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
     if args.show_image_summary:
       if "proposals" in input_dict:
         foo.add_images("data/proposals", input_dict['proposals'][:, :, -1].repeat(1, 3, 1, 1), count)
-      show_image_summary(count, foo, input_var, masks_guidance, target, output)
+      show_image_summary(count, foo, input_var[0:1], masks_guidance, target[0:1], output[0:1])
 
     # compute gradient and do SGD step
     optimizer.zero_grad()

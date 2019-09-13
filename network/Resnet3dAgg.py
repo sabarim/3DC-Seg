@@ -3,6 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from network.Modules import GC3d, Refine3d
+from network.RGMP import Encoder
 from network.Resnet3d import resnet50
 from network.models import BaseNetwork
 
@@ -103,6 +104,20 @@ class Decoder3d(nn.Module):
     return p, p2, p3, p4, p5
 
 
+class DecoderSiam3d(Decoder3d):
+  def __init__(self, tw=5):
+    super(DecoderSiam3d, self).__init__()
+    self.conv1 = nn.Conv3d(4096, 2048, kernel_size=3, padding=1)
+    self.GC = GC3d(2048, 256)
+
+  def forward(self, r5, r4, r3, r2, support):
+    # TODO: check why the strides of the 2d and 3d resnets are different.
+    support = F.interpolate(support, size=r5.shape[-2:], mode='bilinear')
+    r5 = torch.cat((r5, support.unsqueeze(2)), dim=1)
+    r5_red = self.conv1(r5)
+    return super(DecoderSiam3d, self).forward(r5_red, r4, r3, r2, support)
+
+
 class Decoder3dMaskGuidance(Decoder3d):
   def __init__(self, tw=5):
     super(Decoder3dMaskGuidance, self).__init__()
@@ -121,6 +136,20 @@ class Resnet3d(BaseNetwork):
     else:
       r5, r4, r3, r2 = self.encoder.forward(x, ref)
     p, p2, p3, p4, p5 = self.decoder.forward(r5, r4, r3, r2, None)
+    return p, p2, p3, p4, p5, r5
+
+
+class SiamResnet3d(BaseNetwork):
+  def __init__(self, tw=16, sample_size=112):
+    super(SiamResnet3d, self).__init__()
+    self.encoder = Encoder3d(tw, sample_size)
+    self.encoder2d = Encoder()
+    self.decoder = DecoderSiam3d()
+
+  def forward(self, x, ref):
+    r5_ref, r4_ref, r3_ref, r2_ref = self.encoder2d.forward(x[:, :, 0], ref)
+    r5, r4, r3, r2 = self.encoder.forward(x[:, :, 1:], None)
+    p, p2, p3, p4, p5 = self.decoder.forward(r5, r4, r3, r2, r5_ref)
     return p, p2, p3, p4, p5, r5
 
 
@@ -154,3 +183,4 @@ class Resnet3dMaskGuidance(BaseNetwork):
     r5 = torch.cat((r5, ref.unsqueeze(1)), dim=1)
     p, p2, p3, p4, p5 = self.decoder.forward(r5, r4, r3, r2, None)
     return p, p2, p3, p4, p5, r5
+

@@ -1,3 +1,4 @@
+import torch
 from torch import nn
 from torch.nn import functional as F
 
@@ -41,7 +42,7 @@ class Refine3d(nn.Module):
     sr = self.convFS3(F.relu(sr))
     s = s + sr
 
-    m = s + F.upsample(pm, scale_factor=self.scale_factor, mode='trilinear')
+    m = s + F.upsample(pm, size=s.shape[-3:], mode='trilinear')
 
     mr = self.convMM1(F.relu(m))
     mr = self.convMM2(F.relu(mr))
