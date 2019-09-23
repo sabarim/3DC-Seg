@@ -24,7 +24,7 @@ class DAVIS(data.Dataset):
     self.num_classes = num_classes
     self.crop_size = crop_size
     self.is_train = is_train
-    self.random_instance = random_instance and is_train
+    self.random_instance = random_instance
     _imset_f = self.set_paths(imset, resolution, root)
     self.max_proposals = 20
     self.start_index = None
@@ -92,7 +92,7 @@ class DAVIS(data.Dataset):
   def __len__(self):
     return len(self.reference_list) if self.is_train else len(self.img_list)
 
-  def read_frame(self, shape, video, f, instance_id=None):
+  def read_frame(self, shape, video, f, instance_id=None, support_indices=None):
     # use a blend of both full random instance as well as the full object
     img_file = os.path.join(self.image_dir, video, '{:05d}.jpg'.format(f))
     raw_frames = np.array(Image.open(img_file).convert('RGB')) / 255.
@@ -179,7 +179,7 @@ class DAVIS(data.Dataset):
     # add the current index and the previous frame with respect to the max index in supporting frame
     for i in np.sort(support_indices):
       raw_frame, raw_mask, proposals, raw_proposals = \
-        self.read_frame(shape, sequence, i, instance_id)
+        self.read_frame(shape, sequence, i, instance_id, support_indices)
 
       # padding size to be divide by 32
       h, w = raw_mask.shape

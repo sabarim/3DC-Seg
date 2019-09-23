@@ -1,5 +1,6 @@
 import os
-
+import random
+import glob
 import numpy as np
 from PIL import Image
 
@@ -9,12 +10,13 @@ from utils.Resize import ResizeMode, resize
 
 class DAVIS16(DAVIS):
   def __init__(self, root, imset='2017/train.txt', resolution='480p', is_train=False,
-               random_instance=False, num_classes=2, crop_size=None,temporal_window=5, min_temporal_gap=2,
+               random_instance=False, num_classes=2, crop_size=None,temporal_window=8, min_temporal_gap=2,
                max_temporal_gap=8, resize_mode=ResizeMode.FIXED_SIZE, proposal_dir=None, augmentors=None):
     super(DAVIS16, self).__init__(root, imset, is_train=is_train, crop_size=crop_size,
                                   temporal_window=temporal_window, random_instance=random_instance,
                                   resize_mode=resize_mode, proposal_dir=proposal_dir,
-                                  max_temporal_gap=temporal_window *2, min_temporal_gap=1)
+                                  max_temporal_gap=max_temporal_gap, min_temporal_gap=1)
+    self.random_instance_ids = {}
 
   def __getitem__(self, item):
     input_dict = super(DAVIS16, self).__getitem__(item)
@@ -22,7 +24,26 @@ class DAVIS16(DAVIS):
     input_dict['target'] = input_dict['raw_masks']
     return input_dict
 
-  def read_frame(self, shape, video, f, instance_id=None):
+  def set_video_id(self, video):
+    self.current_video = video
+    self.start_index = self.get_start_index(video)
+    self.img_list = list(glob.glob(os.path.join(self.image_dir, self.current_video, '*.jpg')))
+    self.img_list.sort()
+    instance_ids = list(range(self.num_objects[video] + 1))
+    instance_ids.remove(0)
+    self.random_instance_ids[video] = random.choice(instance_ids)
+
+  def get_video_ids(self):
+    # shuffle the list for training
+    return random.sample(self.videos, len(self.videos)) if self.is_train else self.videos
+
+  def __len__(self):
+    if self.is_train or self.current_video is None:
+      return super(DAVIS16, self).__len__()
+    else:
+      return self.num_frames[self.current_video]
+
+  def read_frame(self, shape, video, f, instance_id=None, support_indices=None):
     # use a blend of both full random instance as well as the full object
     img_file = os.path.join(self.image_dir, video, '{:05d}.jpg'.format(f))
     raw_frames = np.array(Image.open(img_file).convert('RGB')) / 255.
@@ -33,19 +54,30 @@ class DAVIS16(DAVIS):
       mask_file = os.path.join(self.mask_dir, video, '00000.png')
       raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
 
-    raw_mask = (raw_mask != 0).astype(np.uint8)
-    tensors_resized = resize({"image":raw_frames, "mask":raw_mask, "proposals": raw_mask},
-                             self.resize_mode, shape)
+    raw_mask = (raw_mask != 0).astype(np.uint8) if not self.random_instance else \
+      (raw_mask == instance_id).astype(np.uint8)
+    if f==min(support_indices) and self.random_instance:
+      tensors_resized = resize({"image": raw_frames, "mask": raw_mask, "proposals": raw_mask},
+                               ResizeMode.BBOX_CROP_AND_RESIZE_FIXED_SIZE, shape)
+    else:
+      tensors_resized = resize({"image":raw_frames, "mask":raw_mask, "proposals": raw_mask},
+                               self.resize_mode, shape)
 
     return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["proposals"], \
            tensors_resized["proposals"]
 
   def get_support_indices(self, index, sequence):
-    if index == 0:
-      support_indices = np.repeat([0], self.temporal_window)
+    # index should be start index of the clip
+    if self.is_train:
+      index_range = np.arange(index, min(self.num_frames[sequence],
+                                         (index + max(self.max_temporal_gap, self.temporal_window))))
     else:
-      support_indices = np.arange(max(0, (index - self.temporal_window) + 1), index + 1)
-      support_indices = np.append(support_indices, np.repeat([index], self.temporal_window - len(support_indices)))
+      index_range = np.arange(index,
+                              min(self.num_frames[sequence], (index + self.temporal_window)))
+
+    support_indices = np.random.choice(index_range, min(self.temporal_window, len(index_range)), replace=False)
+    support_indices = np.sort(np.append(support_indices, np.repeat([index],
+                                                                   self.temporal_window - len(support_indices))))
 
     # print(support_indices)
     return support_indices
@@ -58,6 +90,21 @@ class DAVIS16Eval(DAVISEval):
     super(DAVIS16Eval, self).__init__(root, imset, is_train=is_train, crop_size=crop_size,
                                   temporal_window=temporal_window, random_instance=random_instance,
                                   resize_mode=resize_mode, proposal_dir=proposal_dir)
+
+  def get_support_indices(self, index, sequence):
+    # index should be start index of the clip
+    if self.is_train:
+      index_range = np.arange(index, min(self.num_frames[sequence],
+                                         (index + max(self.max_temporal_gap, self.temporal_window) + 1)))
+    else:
+      index_range = np.arange(index, min(self.num_frames[sequence], (index + self.temporal_window)))
+
+    support_indices = np.random.choice(index_range, min(self.temporal_window, len(index_range)), replace=False)
+    support_indices = np.sort(np.append(support_indices, np.repeat([index],
+                                                                   self.temporal_window - len(support_indices))))
+
+    # print(support_indices)
+    return support_indices
 
   def __getitem__(self, item):
     input_dict = super(DAVIS16Eval, self).__getitem__(item)
@@ -106,3 +153,75 @@ class DAVIS16PredictOneEval(DAVIS16Eval):
     else:
       input_dict['target'] = input_dict['raw_masks'][:,-1]
     return input_dict
+
+
+class DAVIS17MaskGuidance(DAVIS16):
+  def __init__(self, root, imset='2017/train.txt', resolution='480p', is_train=False,
+               random_instance=False, num_classes=2, crop_size=None,temporal_window=8, min_temporal_gap=2,
+               max_temporal_gap=8, resize_mode=ResizeMode.FIXED_SIZE, proposal_dir=None, augmentors=None):
+    super(DAVIS17MaskGuidance, self).__init__(root, imset, is_train=is_train, crop_size=crop_size,
+                                              temporal_window=temporal_window, random_instance=random_instance,
+                                              resize_mode=resize_mode, proposal_dir=proposal_dir,
+                                  max_temporal_gap=max_temporal_gap, min_temporal_gap=1)
+
+  def __getitem__(self, item):
+    input_dict = super(DAVIS17MaskGuidance, self).__getitem__(item)
+    input_dict['masks_guidance'] = input_dict['raw_masks'][:, 0]
+    return input_dict
+
+  def read_frame(self, shape, video, f, instance_id=None, support_indices=None):
+    # use a blend of both full random instance as well as the full object
+    img_file = os.path.join(self.image_dir, video, '{:05d}.jpg'.format(f))
+    raw_frames = np.array(Image.open(img_file).convert('RGB')) / 255.
+    try:
+      mask_file = os.path.join(self.mask_dir, video, '{:05d}.png'.format(f))  # allways return first frame mask
+      raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
+    except:
+      mask_file = os.path.join(self.mask_dir, video, '00000.png')
+      raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
+
+    raw_mask = (raw_mask != 0).astype(np.uint8) if not self.random_instance else \
+      (raw_mask == instance_id).astype(np.uint8)
+    tensors_resized = resize({"image":raw_frames, "mask":raw_mask, "proposals": raw_mask},
+                           self.resize_mode, shape)
+
+    return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["proposals"], \
+           tensors_resized["proposals"]
+
+
+class DAVISSiam3d(DAVIS16):
+  def __init__(self, root, resolution='480p', is_train=False,
+               random_instance=False, num_classes=2, crop_size=None,temporal_window=8, min_temporal_gap=2,
+               max_temporal_gap=8, resize_mode=ResizeMode.FIXED_SIZE, proposal_dir=None, augmentors=None):
+    imset = "2017/train.txt" if is_train else "2017/val.txt"
+    super(DAVISSiam3d, self).__init__(root, imset, is_train=is_train, crop_size=crop_size,
+                                  temporal_window=temporal_window, random_instance=random_instance,
+                                  resize_mode=resize_mode, proposal_dir=proposal_dir,
+                                  max_temporal_gap=max_temporal_gap, min_temporal_gap=1)
+
+  def __getitem__(self, item):
+    input_dict = super(DAVIS16, self).__getitem__(item)
+    input_dict['masks_guidance'] = input_dict['raw_masks'][:, 0]
+    input_dict['target'] = input_dict['raw_masks'][:, 1:]
+    return input_dict
+
+  def read_frame(self, shape, video, f, instance_id=None, support_indices=None):
+    # use a blend of both full random instance as well as the full object
+    img_file = os.path.join(self.image_dir, video, '{:05d}.jpg'.format(f))
+    raw_frames = np.array(Image.open(img_file).convert('RGB')) / 255.
+    try:
+      mask_file = os.path.join(self.mask_dir, video, '{:05d}.png'.format(f))  # allways return first frame mask
+      raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
+    except:
+      mask_file = os.path.join(self.mask_dir, video, '00000.png')
+      raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
+
+    # pick a random instance for each clip during training while pick a common instance for the video during evaluation
+    instance_id = instance_id if self.is_train else self.random_instance_ids[self.current_video]
+    raw_mask = (raw_mask != 0).astype(np.uint8) if not self.random_instance else \
+      (raw_mask == instance_id).astype(np.uint8)
+    tensors_resized = resize({"image":raw_frames, "mask":raw_mask, "proposals": raw_mask},
+                           self.resize_mode, shape)
+
+    return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["proposals"], \
+           tensors_resized["proposals"]
