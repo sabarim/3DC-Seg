@@ -8,7 +8,7 @@ from network.Resnet3d import resnet50
 from network.models import BaseNetwork
 
 
-class Encoder3d(nn.Module):
+class Encoder3d(Encoder):
   def __init__(self, tw = 16, sample_size = 112):
     super(Encoder3d, self).__init__()
     self.conv1_p = nn.Conv3d(1, 64, kernel_size=7, stride=(1, 2, 2),
@@ -31,6 +31,7 @@ class Encoder3d(nn.Module):
     self.register_buffer('std', torch.FloatTensor([1, 1, 1]).view(1, 3, 1, 1, 1))
 
   def freeze_batchnorm(self):
+    print("Freezing batchnorm for Encoder3d")
     # freeze BNs
     for m in self.modules():
       if isinstance(m, nn.BatchNorm2d) or isinstance(m, nn.BatchNorm3d):

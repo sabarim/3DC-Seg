@@ -34,7 +34,8 @@ def infer_DAVIS3d(dataloader, model, criterion, writer, args):
       info = input_dict['info']
 
       input, input_var, loss, pred = forward(criterion, input_dict, ious, model)
-      clip_frames = info['support_indices'][0].data.cpu().numpy()
+      clip_frames = info['support_indices'][0][1:].data.cpu().numpy() if args.test_dataset == "davis_siam" else \
+        info['support_indices'][0].data.cpu().numpy()
       for i in range(len(clip_frames)):
         frame_id = clip_frames[i]
         if frame_id in all_preds:

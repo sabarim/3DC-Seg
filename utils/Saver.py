@@ -8,12 +8,13 @@ from utils.Constants import font
 from utils.util import ToLabel
 
 
-def load_weights(model, optimizer, loadepoch, model_dir, scheduler):
+def load_weights(model, optimizer, args, model_dir, scheduler):
     start_epoch = 0
     best_iou_train = 0
     best_iou_eval = 0
     best_loss_train = 0
     best_loss_eval = 0
+    loadepoch = args.loadepoch
     # load saved model if specified
     if loadepoch is not None:
       print('Loading checkpoint {}@Epoch {}{}...'.format(font.BOLD, loadepoch, font.END))
@@ -33,12 +34,20 @@ def load_weights(model, optimizer, loadepoch, model_dir, scheduler):
         # checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
         checkpoint = {"model": OrderedDict([(k.lower().replace('module.', 'module.encoder.'), v) for k, v in checkpoint['state_dict'].items()])}
         checkpoint['epoch'] = 0
+      elif loadepoch == 'coco_pretrain':
+        load_name = 'saved_models/coco_pretrain.pth'
+        state = model.state_dict()
+        checkpoint = torch.load(load_name)
+        checkpoint['epoch'] = 0
+        keys = ['optimizer', 'scheduler', 'best_iou']
+        for key in keys:
+          del checkpoint[key]
       else:
         load_name = os.path.join(model_dir,
                                  '{}.pth'.format(loadepoch))
         state = model.state_dict()
         checkpoint = torch.load(load_name)
-        start_epoch = checkpoint['epoch'] + 1
+        start_epoch = checkpoint['epoch'] + 1 if args.task == "train" else 0
         # checkpoint["model"] = OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint["model"].items()])
 
       checkpoint_valid = {k: v for k, v in checkpoint['model'].items() if k in state and state[k].shape == v.shape}
@@ -49,17 +58,18 @@ def load_weights(model, optimizer, loadepoch, model_dir, scheduler):
         checkpoint_valid[key] = state[key]
 
       model.load_state_dict(checkpoint_valid)
-      if 'optimizer' in checkpoint.keys() and checkpoint['task'] == 'train':
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        lr = optimizer.param_groups[0]['lr']
-      if 'scheduler' in checkpoint.keys() and checkpoint['scheduler'] is not None and scheduler is not None:
-        scheduler.load_state_dict(checkpoint['scheduler'].state_dict())
-      if 'best_iou' in checkpoint.keys() and checkpoint['task'] == 'train':
-        best_iou_train = checkpoint['best_iou']
-        best_loss_train = checkpoint['loss']
-      elif 'best_iou' in checkpoint.keys():
-        best_iou_eval = checkpoint['best_iou']
-        best_loss_eval = checkpoint['loss']
+      if args.task == 'train':
+        if 'optimizer' in checkpoint.keys() :
+          optimizer.load_state_dict(checkpoint['optimizer'])
+          lr = optimizer.param_groups[0]['lr']
+        if 'scheduler' in checkpoint.keys() and checkpoint['scheduler'] is not None and scheduler is not None:
+          scheduler.load_state_dict(checkpoint['scheduler'].state_dict())
+        if 'best_iou' in checkpoint.keys() and checkpoint['task'] == 'train':
+          best_iou_train = checkpoint['best_iou']
+          best_loss_train = checkpoint['loss']
+        elif 'best_iou' in checkpoint.keys():
+          best_iou_eval = checkpoint['best_iou']
+          best_loss_eval = checkpoint['loss']
 
       del checkpoint
       torch.cuda.empty_cache()

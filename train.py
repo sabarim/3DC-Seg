@@ -193,7 +193,7 @@ if __name__ == '__main__':
     writer = SummaryWriter(log_dir="runs/" + args.network_name)
     optimizer = torch.optim.Adam(model.module.parameters(), lr=args.lr)
     model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval = \
-      load_weights(model, optimizer, args.loadepoch, MODEL_DIR, scheduler=None)# params
+      load_weights(model, optimizer, args, MODEL_DIR, scheduler=None)# params
     lr_schedulers = get_lr_schedulers(optimizer, args, start_epoch)
 
     params = []
