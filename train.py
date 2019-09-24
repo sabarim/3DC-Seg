@@ -38,6 +38,10 @@ palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette
 
 
 def train(train_loader, model, criterion, optimizer, epoch, foo):
+  """
+
+  :type foo: object
+  """
   global count
   batch_time = AverageMeter()
   data_time = AverageMeter()
@@ -201,7 +205,7 @@ if __name__ == '__main__':
       if value.requires_grad:
         params += [{'params':[value],'lr':args.lr, 'weight_decay': 4e-5}]
 
-    criterion = torch.nn.BCELoss(reduce=False)
+    criterion = torch.nn.BCELoss(reduction = "none")
     # iters_per_epoch = len(Trainloader)
     # model.eval()
 

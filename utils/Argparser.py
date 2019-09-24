@@ -112,7 +112,7 @@ def parse_args():
                       default=False, type=bool)
   parser.add_argument('--network_name', dest='network_name',
                       help='Network name',
-                      default=None, type=str)
+                      default=None, type=str, required=True)
   parser.add_argument('--task', dest='task',
                       help='task in <train, eval>',
                       default='train', type=str)
