@@ -24,17 +24,10 @@ from utils.Saver import load_weights, save_checkpoint
 from utils.dataset import get_dataset
 from utils.util import iou_fixed, all_subclasses, get_lr_schedulers, show_image_summary
 
-NUM_EPOCHS = 400
-TRAIN_KITTI = False
-MASK_CHANGE_THRESHOLD = 1000
-
-BBOX_CROP = True
-BEST_IOU=0
-
 network_models = {0:"RGMP", 1:"FeatureAgg3d", 2: "FeatureAgg3dMergeTemporal", 3: "FeatureAgg3dMulti",
                   4: "FeatureAgg3dMulti101", 5: "Resnet3d", 6: "Resnet3dPredictOne", 7: "Resnet3dMaskGuidance",
                   8: "SiamResnet3d"}
-palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
+#palette = Image.open(DAVIS_ROOT + '/Annotations_unsupervised/480p/bear/00000.png').getpalette()
 
 
 def train(train_loader, model, criterion, optimizer, epoch, foo):

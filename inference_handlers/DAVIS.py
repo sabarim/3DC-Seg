@@ -15,7 +15,7 @@ from utils.Constants import DAVIS_ROOT
 from utils.Loss import bootstrapped_ce_loss
 from utils.util import iou_fixed, get_iou
 
-palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
+palette = Image.open(DAVIS_ROOT + '/Annotations_unsupervised/480p/bear/00000.png').getpalette()
 IOU_THRESH = 0.1
 
 

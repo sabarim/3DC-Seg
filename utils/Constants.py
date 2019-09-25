@@ -1,4 +1,4 @@
-DAVIS_ROOT = '/globalwork/mahadevan/mywork/data/DAVIS17/DAVIS'
+DAVIS_ROOT = '/globalwork/data/DAVIS-Unsupervised/DAVIS/'
 YOUTUBEVOS_ROOT = '/globalwork/data/youtube-vos/'
 COCO_ROOT = '/globalwork/mahadevan/mywork/data/coco/'
 #DAVIS_ROOT = '/disk2/data/DAVIS/'
