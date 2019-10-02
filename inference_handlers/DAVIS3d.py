@@ -24,7 +24,7 @@ def infer_DAVIS3d(dataloader, model, criterion, writer, args):
   end = time.time()
   iter = 0
   for seq in dataloader.dataset.get_video_ids():
-  # for seq in ['blackswan']:
+  # for seq in ['bmx-trees']:
     dataloader.dataset.set_video_id(seq)
     ious_video = AverageMeter()
     all_preds = {}

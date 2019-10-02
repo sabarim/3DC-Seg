@@ -56,12 +56,12 @@ class DAVIS16(DAVIS):
 
     raw_mask = (raw_mask != 0).astype(np.uint8) if not self.random_instance else \
       (raw_mask == instance_id).astype(np.uint8)
-    if f==min(support_indices) and self.random_instance:
-      tensors_resized = resize({"image": raw_frames, "mask": raw_mask, "proposals": raw_mask},
-                               ResizeMode.BBOX_CROP_AND_RESIZE_FIXED_SIZE, shape)
-    else:
-      tensors_resized = resize({"image":raw_frames, "mask":raw_mask, "proposals": raw_mask},
-                               self.resize_mode, shape)
+    # if f==min(support_indices) and self.random_instance:
+    #   tensors_resized = resize({"image": raw_frames, "mask": raw_mask, "proposals": raw_mask},
+    #                            ResizeMode.BBOX_CROP_AND_RESIZE_FIXED_SIZE, shape)
+    # else:
+    tensors_resized = resize({"image":raw_frames, "mask":raw_mask, "proposals": raw_mask},
+                             self.resize_mode, shape)
 
     return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["proposals"], \
            tensors_resized["proposals"]
@@ -225,3 +225,25 @@ class DAVISSiam3d(DAVIS16):
 
     return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["proposals"], \
            tensors_resized["proposals"]
+
+  def get_support_indices(self, index, sequence):
+    # First frame would be the reference frame during testing
+    # sampling_window = self.temporal_window if self.is_train else self.temporal_window - 1
+    sampling_window = self.temporal_window
+    # index should be start index of the clip
+    if self.is_train:
+      index_range = np.arange(index, min(self.num_frames[sequence],
+                                         (index + max(self.max_temporal_gap, sampling_window))))
+    else:
+      index_range = [0]
+      index_range = np.append(index_range,
+                              np.arange(index, min(self.num_frames[sequence], (index + sampling_window)))
+                              )
+      # index_range = np.arange(index, min(self.num_frames[sequence], (index + sampling_window)))
+
+    support_indices = np.random.choice(index_range, min(self.temporal_window, len(index_range)), replace=False)
+    support_indices = np.sort(np.append(support_indices, np.repeat([index],
+                                                                   self.temporal_window - len(support_indices))))
+
+    # print(support_indices)
+    return support_indices

@@ -88,9 +88,13 @@ def get_dataset(args):
   elif 'davis_3d' in args.test_dataset:
     testset = DAVIS3dProposalGuidanceEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=False, crop_size=args.crop_size_eval,
                                           resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir)
-  else:
+  elif 'davis' in args.test_dataset:
     testset = DAVISEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=False, crop_size=args.crop_size_eval,
                         resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir)
+  elif args.test_dataset == "youtube_vos":
+    testset = YoutubeVOSDataset(YOUTUBEVOS_ROOT, imset='valid', is_train=False,
+                                 random_instance=args.random_instance, crop_size=args.crop_size,
+                                 resize_mode=args.resize_mode, temporal_window=args.tw)
 
   if 'infer' in args.task:
     if 'davis_proposal_guidance' in args.test_dataset:
