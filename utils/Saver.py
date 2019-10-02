@@ -1,6 +1,5 @@
 import os
 from collections import OrderedDict
-
 import numpy as np
 import torch
 from PIL import Image
@@ -15,45 +14,42 @@ def load_weights(model, optimizer, args, model_dir, scheduler):
     best_loss_train = 0
     best_loss_eval = 0
     loadepoch = args.loadepoch
+    state = model.state_dict()
     # load saved model if specified
     if loadepoch is not None:
       print('Loading checkpoint {}@Epoch {}{}...'.format(font.BOLD, loadepoch, font.END))
-      if loadepoch == '0':
+      if loadepoch == 'siam':
         # transform, checkpoint provided by RGMP
-        load_name = 'saved_models/resnet-50-kinetics.pth'
-        state = model.state_dict()
-        checkpoint = torch.load(load_name)
+        load_name2d = 'saved_models/rgmp.pth'
+        load_name3d = 'saved_models/youtubevos_pretrain.pth'
+        load_name = {1: 'saved_models/youtubevos_pretrain.pth', 2: 'saved_models/rgmp.pth'}
+        checkpoint2d = torch.load(load_name2d)
+        checkpoint = load_pretrained_weights(load_name3d)
+        encoder2d_dict = OrderedDict([(k.lower().replace('module.encoder', 'module.encoder2d'), v)
+                                            for k, v in checkpoint2d.items() if "module.encoder" in k.lower()])
+        checkpoint['model'].update(encoder2d_dict)
         # checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
-        checkpoint = {"model": OrderedDict([(k.lower(), v) for k, v in checkpoint.items()])}
-        checkpoint['epoch'] = 0
       elif loadepoch == 'kinetics':
         # transform, checkpoint provided by RGMP
         load_name = 'saved_models/resnet-50-kinetics.pth'
-        state = model.state_dict()
         checkpoint = torch.load(load_name)
         # checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
-        checkpoint = {"model": OrderedDict([(k.lower().replace('module.', 'module.encoder.'), v) for k, v in checkpoint['state_dict'].items()])}
-        checkpoint['epoch'] = 0
-      elif loadepoch == 'coco_pretrain':
-        load_name = 'saved_models/coco_pretrain.pth'
-        state = model.state_dict()
-        checkpoint = torch.load(load_name)
-        checkpoint['epoch'] = 0
-        keys = ['optimizer', 'scheduler', 'best_iou']
-        for key in keys:
-          del checkpoint[key]
+        checkpoint = {"model": OrderedDict([(k.lower().replace('module.', 'module.encoder.'), v)
+                                            for k, v in checkpoint['state_dict'].items()]), 'epoch': 0}
+      elif 'pretrain' in loadepoch:
+        load_name = os.path.join('saved_models', loadepoch + '.pth')
+        checkpoint = load_pretrained_weights(load_name)
       else:
         load_name = os.path.join(model_dir,
                                  '{}.pth'.format(loadepoch))
-        state = model.state_dict()
         checkpoint = torch.load(load_name)
         start_epoch = checkpoint['epoch'] + 1 if args.task == "train" else 0
         # checkpoint["model"] = OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint["model"].items()])
-
       checkpoint_valid = {k: v for k, v in checkpoint['model'].items() if k in state and state[k].shape == v.shape}
       missing_keys = np.setdiff1d(list(state.keys()),list(checkpoint_valid.keys()))
+      
       if len(missing_keys) > 0:
-        print("WARN: some keys are found missing in the loaded model weights.")
+        print("WARN: {} keys are found missing in the loaded model weights.".format(len(missing_keys)))
       for key in missing_keys:
         checkpoint_valid[key] = state[key]
 
@@ -76,6 +72,15 @@ def load_weights(model, optimizer, args, model_dir, scheduler):
       print('Loaded weights from {}'.format(load_name))
 
     return model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval
+
+
+def load_pretrained_weights(load_name):
+  checkpoint = torch.load(load_name)
+  checkpoint['epoch'] = 0
+  keys = ['optimizer', 'scheduler', 'best_iou']
+  for key in keys:
+    del checkpoint[key]
+  return checkpoint
 
 
 def save_results(all_E, info, num_frames, path, palette):

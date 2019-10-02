@@ -33,7 +33,7 @@ BEST_IOU=0
 
 network_models = {0:"RGMP", 1:"FeatureAgg3d", 2: "FeatureAgg3dMergeTemporal", 3: "FeatureAgg3dMulti",
                   4: "FeatureAgg3dMulti101", 5: "Resnet3d", 6: "Resnet3dPredictOne", 7: "Resnet3dMaskGuidance",
-                  8: "SiamResnet3d"}
+                  8: "SiamResnet3d", 9:"Resnet3dNonLocal"}
 palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
 
 

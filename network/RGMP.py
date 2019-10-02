@@ -28,6 +28,7 @@ class Encoder(nn.Module):
 
   def freeze_batchnorm(self):
     # freeze BNs
+    print("Freezing batchnorm for Resnet50")
     for m in self.modules():
       if isinstance(m, nn.BatchNorm2d):
         for p in m.parameters():
