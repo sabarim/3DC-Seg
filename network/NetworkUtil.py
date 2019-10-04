@@ -14,7 +14,7 @@ def propagate(model, inputs, ref_mask):
   decoder = nn.DataParallel(model.module.decoder)
   e2 = decoder(r5, r4, r3, r2, support)
 
-  return (F.softmax(e2[0], dim=1), r5, e2[-1])
+  return (e2[0], r5, e2[-1])
 
 
 def propagateMultiEncoder(model, inputs, ref_mask, proposals):
@@ -32,7 +32,7 @@ def propagateMultiEncoder(model, inputs, ref_mask, proposals):
   decoder = nn.DataParallel(model.module.decoder)
   e2 = decoder(r5, r4, r3, r2, support)
 
-  return (F.softmax(e2[0], dim=1), r5, e2[-1])
+  return (e2[0], r5, e2[-1])
 
 
 def propagate3d(model, inputs, ref_mask, proposals):
@@ -40,7 +40,7 @@ def propagate3d(model, inputs, ref_mask, proposals):
   assert inputs.shape[2] >= 2
   e2 = model(inputs, ref_mask)
 
-  return (F.softmax(e2[0], dim=1), e2[-1], e2[-2])
+  return (e2[0], e2[-1], e2[-2])
 
 
 def run_forward(model, inputs, ref_masks, proposals):
