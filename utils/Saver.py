@@ -21,7 +21,7 @@ def load_weights(model, optimizer, args, model_dir, scheduler):
       if loadepoch == 'siam':
         # transform, checkpoint provided by RGMP
         load_name2d = 'saved_models/rgmp.pth'
-        load_name3d = 'saved_models/youtubevos_pretrain.pth'
+        load_name3d = 'saved_models/davis16_pretrain.pth'
         load_name = {1: 'saved_models/youtubevos_pretrain.pth', 2: 'saved_models/rgmp.pth'}
         checkpoint2d = torch.load(load_name2d)
         checkpoint = load_pretrained_weights(load_name3d)

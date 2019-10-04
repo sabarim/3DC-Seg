@@ -24,7 +24,8 @@ def get_dataset(args):
   elif args.train_dataset == "davis16":
     trainset = DAVIS16(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
                        temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
-                       random_instance=args.random_instance, max_temporal_gap=args.max_temporal_gap)
+                       random_instance=args.random_instance, max_temporal_gap=args.max_temporal_gap,
+                       num_classes=args.n_classes)
   elif args.train_dataset == "davis_siam":
     trainset = DAVISSiam3d(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
                        temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
@@ -73,7 +74,8 @@ def get_dataset(args):
                                     predict_centre = True)
   elif "davis16" in args.test_dataset:
     testset = DAVIS16Eval(DAVIS_ROOT, crop_size=args.crop_size_eval, random_instance=args.random_instance,
-                          resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir)
+                          resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir,
+                          num_classes=args.n_classes)
   elif "davis_siam" in args.test_dataset:
     testset = DAVISSiam3d(DAVIS_ROOT, crop_size=args.crop_size_eval, random_instance=args.random_instance,
                           resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir)

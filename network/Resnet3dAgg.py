@@ -92,7 +92,7 @@ class Encoder101(Encoder):
 
 
 class Decoder3d(nn.Module):
-  def __init__(self, tw=5):
+  def __init__(self, n_classes=2):
     super(Decoder3d, self).__init__()
     mdim = 256
     self.GC = GC3d(2048, mdim)
@@ -102,10 +102,10 @@ class Decoder3d(nn.Module):
     self.RF3 = Refine3d(512, mdim)  # 1/8 -> 1/4
     self.RF2 = Refine3d(256, mdim)  # 1/4 -> 1
 
-    self.pred5 = nn.Conv3d(mdim, 2, kernel_size=3, padding=1, stride=1)
-    self.pred4 = nn.Conv3d(mdim, 2, kernel_size=3, padding=1, stride=1)
-    self.pred3 = nn.Conv3d(mdim, 2, kernel_size=3, padding=1, stride=1)
-    self.pred2 = nn.Conv3d(mdim, 2, kernel_size=3, padding=1, stride=1)
+    self.pred5 = nn.Conv3d(mdim, n_classes, kernel_size=3, padding=1, stride=1)
+    self.pred4 = nn.Conv3d(mdim, n_classes, kernel_size=3, padding=1, stride=1)
+    self.pred3 = nn.Conv3d(mdim, n_classes, kernel_size=3, padding=1, stride=1)
+    self.pred2 = nn.Conv3d(mdim, n_classes, kernel_size=3, padding=1, stride=1)
 
   def forward(self, r5, r4, r3, r2, support):
     # there is a merge step in the temporal net. This split is a hack to fool it
@@ -129,8 +129,8 @@ class Decoder3d(nn.Module):
 
 
 class Decoder3dNonLocal(Decoder3d):
-  def __init__(self):
-    super(Decoder3dNonLocal, self).__init__()
+  def __init__(self, n_classes=2):
+    super(Decoder3dNonLocal, self).__init__(n_classes=n_classes)
     self.conv_non_local = NONLocalBlock3D(256, sub_sample=True)
 
   def forward(self, r5, r4, r3, r2, support):
@@ -141,7 +141,7 @@ class Decoder3dNonLocal(Decoder3d):
     m4 = self.RF4(r4, m5)  # out: 1/16, 64
     m3 = self.RF3(r3, m4)  # out: 1/8, 64
     m3_nl = self.conv_non_local(m3)
-    m2 = self.RF2(r2, m3 + m3_nl)  # out: 1/4, 64
+    m2 = self.RF2(r2, F.relu(m3_nl))  # out: 1/4, 64
 
     p2 = self.pred2(F.relu(m2))
     p3 = self.pred3(F.relu(m3))
@@ -154,15 +154,16 @@ class Decoder3dNonLocal(Decoder3d):
 
 
 class DecoderSiam3d(Decoder3dNonLocal):
-  def __init__(self, tw=5):
-    super(DecoderSiam3d, self).__init__()
+  def __init__(self, n_classes=2):
+    super(DecoderSiam3d, self).__init__(n_classes=n_classes)
     self.conv1 = nn.Conv3d(4096, 2048, kernel_size=3, padding=1)
+    self.GC = GC3d(4096, 256)
 
   def forward(self, r5, r4, r3, r2, support):
     # TODO: check why the strides of the 2d and 3d resnets are different.
     support = F.interpolate(support, size=r5.shape[-2:], mode='bilinear')
     r5 = torch.cat((r5, support.unsqueeze(2)), dim=1)
-    r5 = F.relu(self.conv1(r5))
+    # r5 = F.relu(self.conv1(r5))
     # r5 = self.conv_non_local(F.relu(r5))
     return super(DecoderSiam3d, self).forward(r5, r4, r3, r2, support)
 
@@ -194,8 +195,8 @@ class SiamResnet3d(BaseNetwork):
     self.encoder = Encoder3d(tw, sample_size)
     self.encoder2d = Encoder()
     self.decoder = DecoderSiam3d()
-    # self.freeze_encoder3d()
-    # self.freeze_encoder2d()
+    self.freeze_encoder3d()
+    self.freeze_encoder2d()
 
   def freeze_encoder3d(self):
     print("Freezing the weights for Encoder3d")
@@ -217,9 +218,9 @@ class SiamResnet3d(BaseNetwork):
 
 
 class Resnet3dNonLocal(Resnet3d):
-  def __init__(self, tw=16, sample_size=112):
+  def __init__(self, n_classes=2):
     super(Resnet3dNonLocal, self).__init__()
-    self.decoder = Decoder3dNonLocal()
+    self.decoder = Decoder3dNonLocal(n_classes)
 
 
 class Resnet3dPredictOne(BaseNetwork):
