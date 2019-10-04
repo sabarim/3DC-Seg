@@ -105,6 +105,8 @@ class DAVIS(data.Dataset):
       mask_file = os.path.join(self.mask_dir, video, '00000.png')
       raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
 
+    mask_void = (raw_mask == 255).astype(np.uint8)
+    raw_mask[raw_mask == 255] = 0
     raw_masks = (raw_mask == instance_id).astype(np.uint8) if instance_id is not None else raw_mask
     num_proposals, raw_proposals, proposal_mask = self.read_proposals(video, f, raw_masks)
     # if self.is_train:
@@ -112,7 +114,7 @@ class DAVIS(data.Dataset):
     tensors_resized = resize({"image":raw_frames, "mask":raw_masks, "proposals": proposal_mask.astype(np.uint8)},
                              self.resize_mode, shape)
 
-    return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["proposals"], raw_proposals
+    return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["proposals"], raw_proposals, mask_void
 
   def read_proposals(self, video, f, gt_mask):
     proposal_file = os.path.join(self.proposal_dir, video, '{:05d}.pickle'.format(f))
@@ -172,13 +174,14 @@ class DAVIS(data.Dataset):
     info['support_indices'] = support_indices
     th_frames = []
     th_masks = []
+    th_mask_void = []
     th_proposals = []
     th_pc = []
     th_ps = []
     instance_id = np.random.choice(np.array(range(1,num_objects+1))) if self.random_instance else None
     # add the current index and the previous frame with respect to the max index in supporting frame
     for i in np.sort(support_indices):
-      raw_frame, raw_mask, proposals, raw_proposals = \
+      raw_frame, raw_mask, proposals, raw_proposals, mask_void = \
         self.read_frame(shape, sequence, i, instance_id, support_indices)
 
       # padding size to be divide by 32
@@ -190,12 +193,14 @@ class DAVIS(data.Dataset):
       lw, uw = (new_w - w) / 2, (new_w - w) / 2 + (new_w - w) % 2
       lh, uh, lw, uw = int(lh), int(uh), int(lw), int(uw)
       pad_masks = np.pad(raw_mask, ((lh, uh), (lw, uw)), mode='constant')
+      pad_mask_void = np.pad(mask_void, ((lh, uh), (lw, uw)), mode='constant')
       pad_proposals = np.pad(proposals, ((lh, uh), (lw, uw)), mode='constant')
       pad_frames = np.pad(raw_frame, ((lh, uh), (lw, uw), (0, 0)), mode='constant')
       info['pad'] = ((lh, uh), (lw, uw))
 
       th_frames.append(np.transpose(pad_frames, (2, 0, 1))[:, np.newaxis])
       th_masks.append(pad_masks[np.newaxis, np.newaxis])
+      th_mask_void.append(pad_mask_void[np.newaxis, np.newaxis])
       th_proposals.append(pad_proposals[np.newaxis, np.newaxis])
       # th_pc.append(proposal_categories[np.newaxis])
       # th_ps.append(proposal_scores[np.newaxis])

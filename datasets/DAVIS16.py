@@ -17,6 +17,7 @@ class DAVIS16(DAVIS):
                                   resize_mode=resize_mode, proposal_dir=proposal_dir,
                                   max_temporal_gap=max_temporal_gap, min_temporal_gap=1)
     self.random_instance_ids = {}
+    self.num_classes = num_classes
 
   def __getitem__(self, item):
     input_dict = super(DAVIS16, self).__getitem__(item)
@@ -54,8 +55,11 @@ class DAVIS16(DAVIS):
       mask_file = os.path.join(self.mask_dir, video, '00000.png')
       raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
 
-    raw_mask = (raw_mask != 0).astype(np.uint8) if not self.random_instance else \
-      (raw_mask == instance_id).astype(np.uint8)
+    mask_void = (raw_mask == 255).astype(np.uint8)
+    raw_mask[raw_mask == 255] = 0
+    if self.num_classes == 2:
+      raw_mask = (raw_mask != 0).astype(np.uint8) if not self.random_instance else \
+        (raw_mask == instance_id).astype(np.uint8)
     # if f==min(support_indices) and self.random_instance:
     #   tensors_resized = resize({"image": raw_frames, "mask": raw_mask, "proposals": raw_mask},
     #                            ResizeMode.BBOX_CROP_AND_RESIZE_FIXED_SIZE, shape)
@@ -64,7 +68,7 @@ class DAVIS16(DAVIS):
                              self.resize_mode, shape)
 
     return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["proposals"], \
-           tensors_resized["proposals"]
+           tensors_resized["proposals"], mask_void
 
   def get_support_indices(self, index, sequence):
     # index should be start index of the clip
@@ -180,13 +184,16 @@ class DAVIS17MaskGuidance(DAVIS16):
       mask_file = os.path.join(self.mask_dir, video, '00000.png')
       raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
 
+    
+    mask_void = (raw_mask == 255).astype(np.uint8)
+    raw_mask[raw_mask == 255] = 0
     raw_mask = (raw_mask != 0).astype(np.uint8) if not self.random_instance else \
       (raw_mask == instance_id).astype(np.uint8)
     tensors_resized = resize({"image":raw_frames, "mask":raw_mask, "proposals": raw_mask},
                            self.resize_mode, shape)
 
     return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["proposals"], \
-           tensors_resized["proposals"]
+           tensors_resized["proposals"], mask_void
 
 
 class DAVISSiam3d(DAVIS16):
@@ -216,6 +223,8 @@ class DAVISSiam3d(DAVIS16):
       mask_file = os.path.join(self.mask_dir, video, '00000.png')
       raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
 
+    mask_void = (raw_mask == 255).astype(np.uint8)
+    raw_mask[raw_mask == 255] = 0
     # pick a random instance for each clip during training while pick a common instance for the video during evaluation
     instance_id = instance_id if self.is_train else self.random_instance_ids[self.current_video]
     raw_mask = (raw_mask != 0).astype(np.uint8) if not self.random_instance else \
@@ -224,7 +233,7 @@ class DAVISSiam3d(DAVIS16):
                            self.resize_mode, shape)
 
     return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["proposals"], \
-           tensors_resized["proposals"]
+           tensors_resized["proposals"], mask_void
 
   def get_support_indices(self, index, sequence):
     # First frame would be the reference frame during testing
