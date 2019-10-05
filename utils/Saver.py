@@ -4,9 +4,8 @@ from collections import OrderedDict
 import numpy as np
 import torch
 from PIL import Image
-from utils.Constants import font
+import utils.Constants as Constants
 from utils.util import ToLabel
-
 
 def load_weights(model, optimizer, args, model_dir, scheduler):
     start_epoch = 0
@@ -17,10 +16,10 @@ def load_weights(model, optimizer, args, model_dir, scheduler):
     loadepoch = args.loadepoch
     # load saved model if specified
     if loadepoch is not None:
-      print('Loading checkpoint {}@Epoch {}{}...'.format(font.BOLD, loadepoch, font.END))
+      print('Loading checkpoint {}@Epoch {}{}...'.format(Constants.font.BOLD, loadepoch, Constants.font.END))
       if loadepoch == '0':
         # transform, checkpoint provided by RGMP
-        load_name = 'saved_models/resnet-50-kinetics.pth'
+        load_name = Constants.MODEL_ROOT + 'resnet-50-kinetics.pth'
         state = model.state_dict()
         checkpoint = torch.load(load_name)
         # checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
@@ -28,14 +27,14 @@ def load_weights(model, optimizer, args, model_dir, scheduler):
         checkpoint['epoch'] = 0
       elif loadepoch == 'kinetics':
         # transform, checkpoint provided by RGMP
-        load_name = 'saved_models/resnet-50-kinetics.pth'
+        load_name = Constants.MODEL_ROOT + 'resnet-50-kinetics.pth'
         state = model.state_dict()
         checkpoint = torch.load(load_name)
         # checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
         checkpoint = {"model": OrderedDict([(k.lower().replace('module.', 'module.encoder.'), v) for k, v in checkpoint['state_dict'].items()])}
         checkpoint['epoch'] = 0
       elif loadepoch == 'coco_pretrain':
-        load_name = 'saved_models/coco_pretrain.pth'
+        load_name = Constants.MODEL_ROOT + 'coco_pretrain.pth'
         state = model.state_dict()
         checkpoint = torch.load(load_name)
         checkpoint['epoch'] = 0

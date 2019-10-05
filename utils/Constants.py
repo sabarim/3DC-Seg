@@ -2,6 +2,7 @@ DAVIS_ROOT = '/globalwork/data/DAVIS-Unsupervised/DAVIS/'
 YOUTUBEVOS_ROOT = '/globalwork/data/youtube-vos/'
 COCO_ROOT = '/globalwork/mahadevan/mywork/data/coco/'
 #DAVIS_ROOT = '/disk2/data/DAVIS/'
+MODEL_ROOT = '/globalwork/mahadevan/vision/davis-unsupervised/saved_models/'
 PALETTE = [
   0, 0, 0,
   31, 119, 180,
