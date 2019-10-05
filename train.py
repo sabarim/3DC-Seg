@@ -52,8 +52,8 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
     foo.add_scalar("data/loss", loss, count)
     foo.add_scalar("data/iou", iou, count)
     if args.show_image_summary:
-      if "proposals" in input_dict:
-        foo.add_images("data/proposals", input_dict['proposals'][:, :, -1].repeat(1, 3, 1, 1), count)
+      #if "proposals" in input_dict:
+      #  foo.add_images("data/proposals", input_dict['proposals'][:, :, -1].repeat(1, 3, 1, 1), count)
       show_image_summary(count, foo, input_var[0:1], masks_guidance, target[0:1], output[0:1])
 
     # compute gradient and do SGD step
