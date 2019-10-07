@@ -180,7 +180,7 @@ class Resnet3dMaskGuidance(BaseNetwork):
   def forward(self, x, ref):
     r5, r4, r3, r2 = self.encoder.forward(x, None)
     assert ref is not None
-    ref = F.upsample(ref, size=r5.shape[-2:], mode='nearest')
+    ref = F.interpolate(ref, size=r5.shape[-2:], mode='nearest')
     r5 = torch.cat((r5, ref.unsqueeze(1)), dim=1)
     p, p2, p3, p4, p5 = self.decoder.forward(r5, r4, r3, r2, None)
     return p, p2, p3, p4, p5, r5
