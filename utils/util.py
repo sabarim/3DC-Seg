@@ -1,5 +1,12 @@
+import inspect
+
 import torch
 import numpy as np
+
+from network.models import BaseNetwork
+from network.FeatureAgg3d import FeatureAgg3d, FeatureAgg3dMergeTemporal
+from network.Resnet3dAgg import Resnet3d
+
 
 
 def ToOneHot(labels, num_objects):
@@ -73,3 +80,18 @@ def show_image_summary(count, foo, input_var, masks_guidance, target, pred):
   for index in range(target.shape[2]):
     foo.add_images("data/target"+ str(index), target[:, :, index].repeat(1,3,1,1), count)
     foo.add_images("data/pred"+ str(index), torch.argmax(pred, dim=1)[:, index].unsqueeze(1).repeat(1,3,1,1), count)
+
+
+def get_model(args, network_models):
+  model_classes = all_subclasses(BaseNetwork)
+  class_index = [cls.__name__ for cls in model_classes].index(network_models[args.network])
+  model_class = list(model_classes)[class_index]
+  spec = inspect.signature(model_class.__init__)
+  fn_args = spec._parameters
+  params = {}
+  if 'n_classes' in fn_args:
+    params['n_classes'] = args.n_classes
+  if 'tw' in fn_args:
+    params['tw'] = args.tw
+  model = model_class(**params)
+  return model

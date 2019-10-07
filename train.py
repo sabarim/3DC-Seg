@@ -5,16 +5,12 @@ import numpy as np
 import torch
 from PIL import Image
 from tensorboardX import SummaryWriter
-from torch import nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, RandomSampler
 
 from inference_handlers.inference import infer
-from network.FeatureAgg3d import FeatureAgg3d, FeatureAgg3dMergeTemporal
-from network.Resnet3dAgg import Resnet3d
 from network.NetworkUtil import run_forward
 from network.RGMP import Encoder
-from network.models import BaseNetwork
 from utils.Argparser import parse_args
 # Constants
 from utils.AverageMeter import AverageMeter
@@ -22,13 +18,11 @@ from utils.Constants import DAVIS_ROOT
 from utils.Loss import bootstrapped_ce_loss
 from utils.Saver import load_weights, save_checkpoint
 from utils.dataset import get_dataset
-from utils.util import iou_fixed, all_subclasses, get_lr_schedulers, show_image_summary
+from utils.util import iou_fixed, get_lr_schedulers, show_image_summary, get_model
 
 network_models = {0:"RGMP", 1:"FeatureAgg3d", 2: "FeatureAgg3dMergeTemporal", 3: "FeatureAgg3dMulti",
                   4: "FeatureAgg3dMulti101", 5: "Resnet3d", 6: "Resnet3dPredictOne", 7: "Resnet3dMaskGuidance",
-                  8: "SiamResnet3d"}
-#palette = Image.open(DAVIS_ROOT + '/Annotations_unsupervised/480p/bear/00000.png').getpalette()
-
+                  8: "SiamResnet3d", 9:"Resnet3dNonLocal"}
 
 def train(train_loader, model, criterion, optimizer, epoch, foo):
   """
@@ -96,11 +90,13 @@ def forward(criterion, input_dict, ious, model):
     pred = F.interpolate(pred[0], target.shape[2:], mode="trilinear")
   else:
     pred = F.interpolate(pred[0], target.shape[2:], mode="bilinear")
-  # output = F.sigmoid(pred[:, -1])
-  # output = F.softmax(pred, dim=1)
-  loss_image = criterion(pred[:, -1], target.squeeze(1).cuda().float())
+
+  if isinstance(criterion, torch.nn.CrossEntropyLoss):
+    loss_image = criterion(pred, target.squeeze(1).cuda().long())
+  else:
+    loss_image = criterion(pred[:, -1], target.squeeze(1).cuda().float())
   loss = bootstrapped_ce_loss(loss_image)
-  # loss = criterion(output, target.squeeze(1)).mean()
+  pred = F.softmax(pred, dim=1)
   iou = iou_fixed(pred.data.cpu().numpy(), target.data.cpu().numpy())
   ious.update(np.mean(iou))
   return input, input_var, iou, loss, loss_image, masks_guidance, pred, target
@@ -169,10 +165,8 @@ if __name__ == '__main__':
     shuffle = True if args.data_sample is None else False
     trainloader = DataLoader(trainset, batch_size=args.bs, num_workers=args.num_workers, shuffle=shuffle, sampler=sampler)
     testloader = DataLoader(testset, batch_size=1, num_workers=1, shuffle=False)
+    model = get_model(args, network_models)
 
-    model_classes = all_subclasses(BaseNetwork)
-    class_index = [cls.__name__ for cls in model_classes].index(network_models[args.network])
-    model = list(model_classes)[class_index](args.tw)
     # model = FeatureAgg3dMergeTemporal()
     print("Using model: {}".format(model.__class__), flush=True)
     print(args)
@@ -198,7 +192,9 @@ if __name__ == '__main__':
       if value.requires_grad:
         params += [{'params':[value],'lr':args.lr, 'weight_decay': 4e-5}]
 
-    criterion = torch.nn.BCELoss(reduction = "none")
+    criterion = torch.nn.BCEWithLogitsLoss(reduce=False) if args.n_classes == 2 else \
+      torch.nn.CrossEntropyLoss(reduce=False)
+    print("Using {} criterion", criterion)
     # iters_per_epoch = len(Trainloader)
     # model.eval()
 

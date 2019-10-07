@@ -71,6 +71,11 @@ def parse_args():
                       nargs='*',
                       default=None, type=str)
 
+  # flags for inference
+  parser.add_argument('--exhaustive', dest='exhaustive',
+                      help='Infer for clips starting from every frame',
+                      default=False, type=bool)
+
   # BPTT
   parser.add_argument('--bptt', dest='bptt_len',
                       help='length of BPTT',
@@ -98,6 +103,9 @@ def parse_args():
   parser.add_argument('--loss_scale', dest='loss_scale',
                       help='scale factor for scaling the loss value',
                       default=1, type=float)
+  parser.add_argument('--n_classes', dest='n_classes',
+                      help='number of classes',
+                      default=2, type=int)
 
   # resume trained model
   parser.add_argument('--loadepoch', dest='loadepoch',

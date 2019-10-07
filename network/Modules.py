@@ -49,6 +49,7 @@ class Refine3d(nn.Module):
     m = m + mr
     return m
 
+
 class GC(nn.Module):
   def __init__(self, inplanes, planes, kh=7, kw=7):
     super(GC, self).__init__()

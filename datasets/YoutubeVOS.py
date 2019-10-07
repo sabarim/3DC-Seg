@@ -34,7 +34,7 @@ class YoutubeVOSDataset(DAVIS):
   def create_img_list(self, _imset_f):
     start = time.time()
     pool = mp.Pool(10)
-    results = [pool.apply(self.video_list, args=(line,)) for line in _imset_f[:100]]
+    results = [pool.apply(self.video_list, args=(line,)) for line in _imset_f]
     results = np.array(results)
     self.videos = results[:, 0]
     self.img_list = np.concatenate(results[:, 1])
@@ -87,7 +87,7 @@ class YoutubeVOSDataset(DAVIS):
     raw_masks = (raw_mask == instance_id).astype(np.uint8) if instance_id is not None \
       else (raw_mask != 0).astype(np.uint8)
     tensors_resized = resize({"image": raw_frames, "mask": raw_masks}, self.resize_mode, shape)
-
+    # print("Max value of image {}".format(np.max(tensors_resized['image'])))
     return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["mask"], tensors_resized["mask"]
 
   def get_support_indices(self, index, sequence):
@@ -113,7 +113,7 @@ class YoutubeVOSDataset(DAVIS):
     #   support_indices = np.append(support_indices, np.array([index, sample_list[-1]]))
 
     support_indices.sort()
-    print("support indices are {}".format(support_indices))
+    # print("support indices are {}".format(support_indices))
     return support_indices.astype(np.int)
 
   def __getitem__(self, item):

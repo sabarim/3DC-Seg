@@ -22,17 +22,17 @@ def infer_DAVIS3d(dataloader, model, criterion, writer, args):
   # switch to evaluate mode
   model.eval()
   end = time.time()
-  iter = 0
   for seq in dataloader.dataset.get_video_ids():
-  # for seq in ['blackswan']:
+  # for seq in ['bmx-trees']:
     dataloader.dataset.set_video_id(seq)
     ious_video = AverageMeter()
     all_preds = {}
     all_targets = {}
 
-    for i, input_dict in enumerate(dataloader):
+    for iter, input_dict in enumerate(dataloader):
+      if not args.exhaustive and iter % args.tw != 0:
+        continue
       info = input_dict['info']
-
       input, input_var, loss, pred = forward(criterion, input_dict, ious, model)
       clip_frames = info['support_indices'][0][1:].data.cpu().numpy() if args.test_dataset == "davis_siam" else \
         info['support_indices'][0].data.cpu().numpy()
@@ -74,10 +74,11 @@ def forward(criterion, input_dict, ious, model):
     pred = F.interpolate(pred[0], target.shape[2:], mode="trilinear")
   else:
     pred = F.interpolate(pred[0], target.shape[2:], mode="bilinear")
-  loss_image = criterion(pred[:, -1], target.squeeze(1).cuda().float())
-  loss = bootstrapped_ce_loss(loss_image)
+  # loss_image = criterion(pred[:, -1], target.squeeze(1).cuda().float())
+  # loss = bootstrapped_ce_loss(loss_image)
+  loss=0
 
-  return input, input_var, loss, pred
+  return input, input_var, loss, F.softmax(pred, dim=1)
 
 
 def save_results(pred, info, results_path):

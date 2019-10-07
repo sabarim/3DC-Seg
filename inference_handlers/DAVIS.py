@@ -118,7 +118,7 @@ def forward(criterion, input_dict, model, obj_cats, writer, iter, image_summary)
     label = (target == object+1).float()
     # compute output
     logits = run_forward(model, input_var, input_guidance, proposals)[0]
-    pred = torch.argmax(logits, dim=1)
+    pred = torch.argmax(F.softmax(logits, dim=1), dim=1)
     # store the logits for foreground region to make decisions in the regions where objects overlap
     fg_logits = logits[:, -1] * pred.float()
     preds += [pred.float()]
