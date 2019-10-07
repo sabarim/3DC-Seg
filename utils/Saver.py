@@ -42,7 +42,7 @@ def load_weights(model, optimizer, args, model_dir, scheduler):
         for key in keys:
           del checkpoint[key]
       else:
-        load_name = os.path.join(model_dir,
+        load_name = os.path.join('saved_models/',
                                  '{}.pth'.format(loadepoch))
         state = model.state_dict()
         checkpoint = torch.load(load_name)
