@@ -27,6 +27,9 @@ def parse_args():
   parser.add_argument('--save_results', dest='save_results',
                       help='save predictions during inference',
                       default=False, type=bool)
+  parser.add_argument('--save_per_clip', dest='save_per_clip',
+                      help='save embeddings per clip',
+                      default=False, type=bool)
   parser.add_argument('--proposal_dir', dest='proposal_dir',
                       help='path to proposals',
                       default="results/converted_proposals/thresh-0-all_fields/", type=str)
@@ -68,6 +71,10 @@ def parse_args():
                       default=5, type=int)
   parser.add_argument('--augmentors', dest='augmentors',
                       help='augmentors to use',
+                      nargs='*',
+                      default=None, type=str)
+  parser.add_argument('--losses', dest='losses',
+                      help='losses to use while training',
                       nargs='*',
                       default=None, type=str)
 
@@ -139,6 +146,7 @@ def parse_args():
   parser.add_argument('--show_image_summary', dest='show_image_summary',
                       help='show image summary',
                       default=False, type=bool)
+  parser.add_argument('--local_rank', type=int, default=0)
 
   args = parser.parse_args()
   return args

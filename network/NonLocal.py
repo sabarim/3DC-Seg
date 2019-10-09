@@ -4,13 +4,14 @@ from torch.nn import functional as F
 
 
 class _NonLocalBlockND(nn.Module):
-    def __init__(self, in_channels, inter_channels=None, dimension=3, sub_sample=True, bn_layer=True):
+    def __init__(self, in_channels, inter_channels=None, dimension=3, sub_sample=True, bn_layer=True, return_sim=False):
         super(_NonLocalBlockND, self).__init__()
 
         assert dimension in [1, 2, 3]
 
         self.dimension = dimension
         self.sub_sample = sub_sample
+        self.return_sim = return_sim
 
         self.in_channels = in_channels
         self.inter_channels = inter_channels
@@ -82,7 +83,8 @@ class _NonLocalBlockND(nn.Module):
         W_y = self.W(y)
         z = W_y + x
 
-        return z
+        return (z, f_div_C) if self.return_sim else z
+        # return z
 
 
 class NONLocalBlock1D(_NonLocalBlockND):
@@ -102,8 +104,8 @@ class NONLocalBlock2D(_NonLocalBlockND):
 
 
 class NONLocalBlock3D(_NonLocalBlockND):
-    def __init__(self, in_channels, inter_channels=None, sub_sample=True, bn_layer=True):
+    def __init__(self, in_channels, inter_channels=None, sub_sample=True, bn_layer=True, return_sim=False):
         super(NONLocalBlock3D, self).__init__(in_channels,
                                               inter_channels=inter_channels,
                                               dimension=3, sub_sample=sub_sample,
-                                              bn_layer=bn_layer)
+                                              bn_layer=bn_layer, return_sim = return_sim)

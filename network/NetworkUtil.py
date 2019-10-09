@@ -40,7 +40,7 @@ def propagate3d(model, inputs, ref_mask, proposals):
   assert inputs.shape[2] >= 2
   e2 = model(inputs, ref_mask)
 
-  return (e2[0], e2[-1], e2[-2])
+  return e2
 
 
 def run_forward(model, inputs, ref_masks, proposals):

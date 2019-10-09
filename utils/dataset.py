@@ -1,9 +1,9 @@
 from datasets.DAVIS import DAVIS, DAVISEval, DAVISInfer
 from datasets.DAVIS16 import DAVIS16Eval, DAVIS16, DAVIS16PredictOne, DAVIS16PredictOneEval, DAVIS17MaskGuidance, \
-  DAVISSiam3d
+  DAVISSiam3d, DAVISSimilarity
 from datasets.DAVIS3dProposalGuidance import DAVIS3dProposalGuidance, DAVIS3dProposalGuidanceEval
 from datasets.DAVISProposalGuidance import DAVISProposalGuidance, DAVISProposalGuidanceEval, DAVISProposalGuidanceInfer
-from datasets.YoutubeVOS import YoutubeVOSDataset
+from datasets.YoutubeVOS import YoutubeVOSDataset, YoutubeVOSEmbedding
 from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT
 from datasets.static.COCO import COCODataset, COCOInstanceDataset
 
@@ -26,6 +26,10 @@ def get_dataset(args):
                        temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
                        random_instance=args.random_instance, max_temporal_gap=args.max_temporal_gap,
                        num_classes=args.n_classes)
+  elif args.train_dataset == "davis_similarity":
+    trainset = DAVISSimilarity(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
+                       temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
+                       random_instance=args.random_instance, max_temporal_gap=args.max_temporal_gap)
   elif args.train_dataset == "davis_siam":
     trainset = DAVISSiam3d(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
                        temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
@@ -41,6 +45,10 @@ def get_dataset(args):
                      proposal_dir=args.proposal_dir)
   elif args.train_dataset == "youtube_vos":
     trainset = YoutubeVOSDataset(YOUTUBEVOS_ROOT, imset='train', is_train=True,
+                                 random_instance=args.random_instance, crop_size=args.crop_size,
+                                 resize_mode=args.resize_mode, temporal_window=args.tw, num_classes=args.n_classes)
+  elif args.train_dataset == "yvos_embedding":
+    trainset = YoutubeVOSEmbedding(YOUTUBEVOS_ROOT, imset='train', is_train=True,
                                  random_instance=args.random_instance, crop_size=args.crop_size,
                                  resize_mode=args.resize_mode, temporal_window=args.tw)
   elif args.train_dataset == "davis_3d":
@@ -76,6 +84,9 @@ def get_dataset(args):
     testset = DAVIS16Eval(DAVIS_ROOT, crop_size=args.crop_size_eval, random_instance=args.random_instance,
                           resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir,
                           num_classes=args.n_classes)
+  elif "davis_similarity" in args.test_dataset:
+    testset = DAVISSimilarity(DAVIS_ROOT, imset="2017/val.txt", crop_size=args.crop_size_eval, random_instance=args.random_instance,
+                          resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir)
   elif "davis_siam" in args.test_dataset:
     testset = DAVISSiam3d(DAVIS_ROOT, crop_size=args.crop_size_eval, random_instance=args.random_instance,
                           resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir)
@@ -96,7 +107,7 @@ def get_dataset(args):
   elif args.test_dataset == "youtube_vos":
     testset = YoutubeVOSDataset(YOUTUBEVOS_ROOT, imset='valid', is_train=False,
                                  random_instance=args.random_instance, crop_size=args.crop_size,
-                                 resize_mode=args.resize_mode, temporal_window=args.tw)
+                                 resize_mode=args.resize_mode, temporal_window=args.tw, num_classes=args.n_classes)
 
   if 'infer' in args.task:
     if 'davis_proposal_guidance' in args.test_dataset:
