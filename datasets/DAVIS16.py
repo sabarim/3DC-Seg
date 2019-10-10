@@ -261,12 +261,14 @@ class DAVISSiam3d(DAVIS16):
 
 class DAVISSimilarity(DAVIS16):
   def __init__(self, root, imset='2017/train.txt', resolution='480p', is_train=False,
-               random_instance=False, num_classes=10, crop_size=None,temporal_window=8, min_temporal_gap=2,
+               random_instance=False, num_classes=2, crop_size=None,temporal_window=8, min_temporal_gap=2,
                max_temporal_gap=8, resize_mode=ResizeMode.FIXED_SIZE, proposal_dir=None, augmentors=None):
+    # FIXME: this flag is a hack to check if it is a multi class training
+    self.multi = (num_classes != 2)
     super(DAVISSimilarity, self).__init__(root, imset, is_train=is_train, crop_size=crop_size,
                                   temporal_window=temporal_window, random_instance=random_instance,
                                   resize_mode=resize_mode, proposal_dir=proposal_dir,
-                                  max_temporal_gap=max_temporal_gap, min_temporal_gap=1, num_classes=num_classes)
+                                  max_temporal_gap=max_temporal_gap, min_temporal_gap=1, num_classes=10)
 
   def __getitem__(self, item):
     input_dict = super(DAVISSimilarity, self).__getitem__(item)
@@ -279,6 +281,7 @@ class DAVISSimilarity(DAVIS16):
     #                               'similarity_raw_mask': input_dict['target']}
     input_dict['target_extra'] = {'similarity_ref': np.concatenate(one_hot_masks, axis=1).astype(np.uint8),
                                   'similarity_raw_mask': input_dict['target'][:, 1:]}
-    input_dict['target'] = (input_dict['target'] != 0).astype(np.uint8)
+    if not self.multi:
+      input_dict['target'] = (input_dict['target'] != 0).astype(np.uint8)
 
     return input_dict

@@ -24,8 +24,8 @@ def infer_DAVIS3d(dataloader, model, criterion, writer, args):
   # switch to evaluate mode
   model.eval()
   end = time.time()
-  for seq in dataloader.dataset.get_video_ids():
-  # for seq in ['bmx-trees']:
+  # for seq in dataloader.dataset.get_video_ids():
+  for seq in ['dogs-jump']:
     dataloader.dataset.set_video_id(seq)
     ious_video = AverageMeter()
     all_preds = {}
@@ -46,7 +46,7 @@ def infer_DAVIS3d(dataloader, model, criterion, writer, args):
           # all_e[frame_id] += [pred_extra[0, :, i].data.cpu()]
         else:
           all_preds[frame_id] = [pred[0, :, i].data.cpu()]
-          all_e[frame_id] = [pred_extra[0, :, i].data.cpu()]
+          # all_e[frame_id] = [pred_extra[0, :, i].data.cpu()]
 
         if frame_id not in all_targets:
           all_targets[frame_id] = input_dict['target'][0, 0, i].data.cpu()
@@ -60,8 +60,8 @@ def infer_DAVIS3d(dataloader, model, criterion, writer, args):
     print('Sequence {}\t IOU {iou}'.format(input_dict['info']['name'], iou=iou))
     ious.update(iou, 1)
 
-    results_extra = torch.stack([torch.stack(val).mean(dim=0) for key, val in all_e.items()])
-    save_results(results, results_extra, info, os.path.join('results', args.network_name))
+    # results_extra = torch.stack([torch.stack(val).mean(dim=0) for key, val in all_e.items()])
+    save_results(results, None, info, os.path.join('results', args.network_name))
 
   print('Finished Inference Loss {losses.avg:.5f} IOU {iou.avg: 5f}'
         .format(losses=losses, iou=ious))
@@ -88,8 +88,6 @@ def forward(criterion, input_dict, ious, model):
   else:
     pred = F.interpolate(pred[0], target.shape[2:], mode="bilinear")
     pred_extra = F.interpolate(pred_extra, target.shape[2:], mode="bilinear")
-  # loss_image = criterion(pred[:, -1], target.squeeze(1).cuda().float())
-  # loss = bootstrapped_ce_loss(loss_image)
   loss=0
 
   return input, input_var, loss, F.softmax(pred, dim=1), pred_extra

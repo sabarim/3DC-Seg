@@ -36,7 +36,7 @@ class YoutubeVOSDataset(DAVIS):
   def create_img_list(self, _imset_f):
     start = time.time()
     pool = mp.Pool(10)
-    results = [pool.apply(self.video_list, args=(line,)) for line in _imset_f[:100]]
+    results = [pool.apply(self.video_list, args=(line,)) for line in _imset_f]
     results = np.array(results)
     self.videos = results[:, 0]
     self.img_list = np.concatenate(results[:, 1])

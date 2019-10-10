@@ -30,7 +30,8 @@ BEST_IOU=0
 
 network_models = {0:"RGMP", 1:"FeatureAgg3d", 2: "FeatureAgg3dMergeTemporal", 3: "FeatureAgg3dMulti",
                   4: "FeatureAgg3dMulti101", 5: "Resnet3d", 6: "Resnet3dPredictOne", 7: "Resnet3dMaskGuidance",
-                  8: "SiamResnet3d", 9:"Resnet3dNonLocal", 10: "Resnet3dSimilarity", 11:"Resnet3dEmbeddingNetwork"}
+                  8: "SiamResnet3d", 9:"Resnet3dNonLocal", 10: "Resnet3dSimilarity", 11:"Resnet3dEmbeddingNetwork",
+                  12: "Resnet3dSegmentEmbedding"}
 palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
 
 
@@ -77,8 +78,7 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
       epoch, i * args.bs, len(train_loader)*args.bs, batch_time=batch_time,
       data_time=data_time, loss=losses, iou=ious, loss_extra=losses_extra), flush=True)
 
-  print('Finished Train Epoch {} Loss {losses.avg:.5f} IOU {iou.avg: 5f}'
-        .format(epoch, losses=losses, iou=ious), flush=True)
+  print('Finished Train Epoch {} Loss {losses.avg:.5f} Loss Extra {losses_extra.avg: .5f} IOU {iou.avg: .5f}'.format(epoch, losses=losses, losses_extra=losses_extra, iou=ious), flush=True)
   return losses.avg, ious.avg
 
 
@@ -155,8 +155,8 @@ def compute_loss(criterion, pred, target, target_extra = None):
       loss_extra = criterion_extra(y, similarity_target)
       loss_extra = bootstrapped_ce_loss(loss_extra)
     if "embedding" in args.losses:
-      pred_extra = F.interpolate(pred_extra, scale_factor=(2,1,1), mode='trilinear')
-      loss_extra, _, _ = compute_embedding_loss(pred_extra, target_extra['similarity_ref'])
+      pred_extra = F.interpolate(pred_extra, scale_factor=(1,8,8), mode='trilinear')
+      loss_extra, _, _ = compute_embedding_loss(pred_extra, target_extra['similarity_ref'].cuda())
 
   # print("loss_extra {}".format(loss_extra))
   loss = loss_mask + loss_extra
@@ -206,8 +206,8 @@ def validate(val_loader, model, criterion, epoch, foo):
 
     foo.add_scalar("data/losses-test", losses.avg, epoch)
 
-  print('Finished Eval Epoch {} Loss {losses.avg:.5f} IOU {iou.avg: 5f}'
-        .format(epoch, losses=losses, iou=ious), flush=True)
+  print('Finished Eval Epoch {} Loss {losses.avg:.5f} Losses Extra {losses_extra.avg} IOU {iou.avg: 5f}'
+        .format(epoch, losses=losses, losses_extra=losses_extra, iou=ious), flush=True)
 
   return losses.avg, ious.avg
 

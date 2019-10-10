@@ -22,15 +22,15 @@ def compute_embedding_loss(embedding_map, targets):
   losses_distance = torch.zeros((0,), dtype=torch.float32, device=embedding_map.device)
   losses_regularization = torch.zeros((0,), dtype=torch.float32, device=embedding_map.device)
 
-  DELTA_VAR = 0.1  # distance of instance pixels to their respective centers
+  DELTA_VAR = 0.02  # distance of instance pixels to their respective centers
   DELTA_DISTANCE = 0.5  # distance between centers of different instances (/2)
 
-  W_VAR_LOSS = 1.0
-  W_DISTANCE_LOSS = 1.0
+  W_VAR_LOSS = 0.2
+  W_DISTANCE_LOSS = 0.8
   W_REGULARIZATION_LOSS = 1e-3
 
   # The masks have to be resized to match the size of the embedding map
-  SCALE_FACTOR = 0.125
+  SCALE_FACTOR = 1
 
   for embeddings_per_seq, targets_per_seq in zip(embedding_map, targets):
       masks = targets_per_seq

@@ -148,5 +148,9 @@ def parse_args():
                       default=False, type=bool)
   parser.add_argument('--local_rank', type=int, default=0)
 
+  # embedding
+  parser.add_argument('--embedding_dim', dest='embedding_dim',
+                      help='embedding dimension', default=64, type=int)
+
   args = parser.parse_args()
   return args
