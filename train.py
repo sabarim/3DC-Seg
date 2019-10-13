@@ -2,6 +2,7 @@ import os
 import time
 
 import numpy as np
+import sys
 import torch
 from PIL import Image
 from tensorboardX import SummaryWriter
@@ -14,6 +15,7 @@ from network.RGMP import Encoder
 from utils.Argparser import parse_args
 # Constants
 from utils.AverageMeter import AverageMeter
+from utils.Config import Config
 from utils.Constants import DAVIS_ROOT
 from utils.Loss import bootstrapped_ce_loss
 from utils.Saver import load_weights, save_checkpoint
@@ -156,7 +158,7 @@ def compute_loss(criterion, pred, target, target_extra = None):
       loss_extra = bootstrapped_ce_loss(loss_extra)
     if "embedding" in args.losses:
       pred_extra = F.interpolate(pred_extra, scale_factor=(1,8,8), mode='trilinear')
-      loss_extra, _, _ = compute_embedding_loss(pred_extra, target_extra['similarity_ref'].cuda())
+      loss_extra, _, _ = compute_embedding_loss(pred_extra, target_extra['similarity_ref'].cuda(), args.config_path)
 
   # print("loss_extra {}".format(loss_extra))
   loss = loss_mask + loss_extra
@@ -219,13 +221,6 @@ if __name__ == '__main__':
     print("Arguments used: {}".format(args), flush=True)
 
     trainset, testset = get_dataset(args)
-    # trainset = DAVIS(DAVIS_ROOT, imset='2017/train.txt', is_train=True,
-    #                  random_instance=args.random_instance, crop_size=args.crop_size, resize_mode=args.resize_mode)
-    # trainset = YoutubeVOSDataset(YOUTUBEVOS_ROOT, imset='train', is_train=True,
-    #                  random_instance=args.random_instance, crop_size=args.crop_size, resize_mode=args.resize_mode)
-    # testset = DAVISEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=False, crop_size=args.crop_size_eval,
-    #                     resize_mode=args.resize_mode_eval)
-    # sample a subset of data for testing
     sampler = RandomSampler(trainset, replacement=True, num_samples=args.data_sample) \
       if args.data_sample is not None else None
     shuffle = True if args.data_sample is None else False

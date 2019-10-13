@@ -156,7 +156,7 @@ def compute_loss(criterion, pred, target, target_extra = None):
       loss_extra = bootstrapped_ce_loss(loss_extra)
     if "embedding" in args.losses:
       pred_extra = F.interpolate(pred_extra, scale_factor=(1,8,8), mode='trilinear')
-      loss_extra, _, _ = compute_embedding_loss(pred_extra, target_extra['similarity_ref'].cuda())
+      loss_extra, _, _ = compute_embedding_loss(pred_extra, target_extra['similarity_ref'].cuda(), args.config_path)
 
   # print("loss_extra {}".format(loss_extra))
   loss = loss_mask + loss_extra
@@ -201,7 +201,8 @@ def validate(dataset, model, criterion, epoch, foo):
               'Loss {loss.val:.4f} ({loss.avg:.5f})\t'
               'Loss Extra {loss_extra.val:.4f} ({loss_extra.avg:.5f})\t'
               'IOU {iou.val:.4f} ({iou.avg:.5f})\t'.format(
-          input_dict['info']['name'], i, len(testloader), batch_time=batch_time, loss=losses, iou=ious_video),
+          input_dict['info']['name'], i, len(testloader), batch_time=batch_time, loss=losses, iou=ious_video,
+          loss_extra=losses_extra),
           flush=True)
     print('Sequence {0}\t IOU {iou.avg}'.format(input_dict['info']['name'], iou=ious_video), flush=True)
     ious.update(ious_video.avg)
@@ -223,11 +224,10 @@ if __name__ == '__main__':
     print("Arguments used: {}".format(args), flush=True)
 
     trainset, testset = get_dataset(args)
-    train_sampler = RandomSampler(trainset, replacement=True, num_samples=args.data_sample) \
-      if args.data_sample is not None else \
-      torch.utils.data.distributed.DistributedSampler(trainset, num_replicas=torch.cuda.device_count(),
-                                                      rank=local_rank, shuffle=True)
-    shuffle = True if args.data_sample is None else False
+    #train_sampler = RandomSampler(trainset, replacement=True, num_samples=args.data_sample) \
+    #  if args.data_sample is not None else \
+    #  torch.utils.data.distributed.DistributedSampler(trainset, shuffle=True)
+    #shuffle = True if args.data_sample is None else False
     model = get_model(args, network_models)
 
     # model = FeatureAgg3dMergeTemporal()
@@ -241,6 +241,10 @@ if __name__ == '__main__':
 
     # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model = torch.nn.parallel.DistributedDataParallel(model,find_unused_parameters=True)
+    train_sampler = RandomSampler(trainset, replacement=True, num_samples=args.data_sample) \
+      if args.data_sample is not None else \
+      torch.utils.data.distributed.DistributedSampler(trainset, shuffle=True)
+    shuffle = True if args.data_sample is None else False
 
     trainloader = DataLoader(trainset, batch_size=args.bs, num_workers=args.num_workers,
                              sampler=train_sampler)

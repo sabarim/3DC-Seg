@@ -94,8 +94,9 @@ class NonlocalOffsetEmbeddingHead(nn.Module):
         # x = x[0]
         N, C, T, H, W = x.shape
 
+        # comment: t_scale = 1/(H/T): eg:-352/8
         grid = self.nonlocal_block.create_spatiotemporal_grid(
-            H, W, T, 0.1, x.dtype, x.device).unsqueeze(0).expand(N, -1, -1, -1, -1)  # [N, 3, 1, 1, 1]
+            H, W, T, 0.028, x.dtype, x.device).unsqueeze(0).expand(N, -1, -1, -1, -1)  # [N, 3, 1, 1, 1]
         zeros = torch.zeros(N, C-3, T, H, W, dtype=x.dtype, device=x.device)
         grid_cat = torch.cat((grid, zeros), dim=1)
 
@@ -106,11 +107,11 @@ class NonlocalOffsetEmbeddingHead(nn.Module):
 
         x = self.conv_offset(x)  # [N, 2, T, H, W]
 
-        grid = grid[:, 1:]
-        if self.embedding_size > 2:
-            zeros = torch.zeros(N, self.embedding_size - 2, T, H, W, dtype=x.dtype, device=x.device)
+        # grid = grid[:, 1:]
+        if self.embedding_size > 3:
+            zeros = torch.zeros(N, self.embedding_size - 3, T, H, W, dtype=x.dtype, device=x.device)
             grid_cat = torch.cat((grid, zeros), dim=1)
-        elif self.embedding_size == 2:
+        elif self.embedding_size == 3:
             grid_cat = grid
         else:  # embedding size == 1
             grid_cat = torch.tensor(0, dtype=x.dtype, device=x.device)

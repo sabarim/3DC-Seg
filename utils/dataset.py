@@ -1,41 +1,48 @@
 from datasets.DAVIS import DAVIS, DAVISEval, DAVISInfer
-from datasets.DAVIS16 import DAVIS16Eval, DAVIS16, DAVIS16PredictOne, DAVIS16PredictOneEval, DAVIS17MaskGuidance, \
-  DAVISSiam3d, DAVISSimilarity
+from datasets.DAVIS16 import DAVIS16Eval, DAVIS16PredictOneEval, DAVIS17MaskGuidance, \
+  DAVISSiam3d
 from datasets.DAVIS3dProposalGuidance import DAVIS3dProposalGuidance, DAVIS3dProposalGuidanceEval
-from datasets.DAVISProposalGuidance import DAVISProposalGuidance, DAVISProposalGuidanceEval, DAVISProposalGuidanceInfer
+from datasets.DAVISProposalGuidance import DAVISProposalGuidanceEval, DAVISProposalGuidanceInfer
 from datasets.YoutubeVOS import YoutubeVOSDataset, YoutubeVOSEmbedding
-from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT
 from datasets.static.COCO import COCODataset, COCOInstanceDataset
+from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT
 
 
 def get_dataset(args):
   if args.train_dataset == "davis_proposal_guidance":
+    from datasets.DAVISProposalGuidance import DAVISProposalGuidance
     trainset = DAVISProposalGuidance(DAVIS_ROOT, imset='2017/train.txt', is_train=True,
                                      random_instance=args.random_instance, crop_size=args.crop_size, resize_mode=args.resize_mode,
                                      max_temporal_gap=12, temporal_window=args.tw, augmentors=args.augmentors,
                                      proposal_dir=args.proposal_dir)
   elif args.train_dataset == "davis16_last":
+    from datasets.DAVIS16 import DAVIS16PredictOne
     trainset = DAVIS16PredictOne(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
                                  temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir)
   elif args.train_dataset == "davis16_centre":
+    from datasets.DAVIS16 import DAVIS16PredictOne
     trainset = DAVIS16PredictOne(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
                                  temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
                                  predict_centre=True)
   elif args.train_dataset == "davis16":
+    from datasets.DAVIS16 import DAVIS16
     trainset = DAVIS16(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
                        temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
                        random_instance=args.random_instance, max_temporal_gap=args.max_temporal_gap,
                        num_classes=args.n_classes)
   elif args.train_dataset == "davis_similarity":
+    from datasets.DAVIS16 import DAVISSimilarity
     trainset = DAVISSimilarity(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
                        temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
                        random_instance=args.random_instance, max_temporal_gap=args.max_temporal_gap,
                                num_classes=args.n_classes)
   elif args.train_dataset == "davis_siam":
+    from datasets.DAVIS16 import DAVISSiam3d
     trainset = DAVISSiam3d(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
                        temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
                        random_instance=args.random_instance, max_temporal_gap=args.max_temporal_gap)
   elif args.train_dataset == "davis17_mask_guidance":
+    from datasets.DAVIS16 import DAVIS17MaskGuidance
     trainset = DAVIS17MaskGuidance(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
                        temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
                        random_instance=args.random_instance, max_temporal_gap=args.max_temporal_gap)
@@ -86,6 +93,7 @@ def get_dataset(args):
                           resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir,
                           num_classes=args.n_classes)
   elif "davis_similarity" in args.test_dataset:
+    from datasets.DAVIS16 import DAVISSimilarity
     testset = DAVISSimilarity(DAVIS_ROOT, imset="2017/val.txt", crop_size=args.crop_size_eval, random_instance=args.random_instance,
                           resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir,
                               num_classes=args.n_classes)

@@ -152,5 +152,10 @@ def parse_args():
   parser.add_argument('--embedding_dim', dest='embedding_dim',
                       help='embedding dimension', default=64, type=int)
 
+  # config file for parameters
+  parser.add_argument('--config_path', dest='config_path',
+                      help='config file path for loss parameters', default="run_configs/param_configs/embedding_config",
+                      type=str)
+
   args = parser.parse_args()
   return args

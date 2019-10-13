@@ -50,7 +50,7 @@ def load_weights(model, optimizer, args, model_dir, scheduler):
       missing_keys = np.setdiff1d(list(state.keys()),list(checkpoint_valid.keys()))
       
       if len(missing_keys) > 0:
-        print("WARN: {} keys are found missing in the loaded model weights.".format(len(missing_keys)))
+        print("WARN: {} keys are found missing in the loaded model weights.".format(missing_keys))
       for key in missing_keys:
         checkpoint_valid[key] = state[key]
 

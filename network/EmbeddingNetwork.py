@@ -1,3 +1,5 @@
+from torch import nn
+
 from network.Resnet3dAgg import Encoder3d, Decoder3d, Resnet3dSimilarity
 from network.embedding_head import NonlocalOffsetEmbeddingHead
 from network.models import BaseNetwork
@@ -26,8 +28,10 @@ class DecoderWithEmbedding(Decoder3d):
 
 
 class DecoderSegmentEmbedding(DecoderWithEmbedding):
-  def __init__(self, n_classes=2):
-    super(DecoderSegmentEmbedding, self).__init__(n_classes=n_classes, e_dim=256)
+  def __init__(self, n_classes=2, e_dim=64):
+    super(DecoderSegmentEmbedding, self).__init__(n_classes=n_classes, e_dim=e_dim)
+    # self.convG1 = nn.Conv3d(2048, 256, kernel_size=3, padding=1)
+    self.con1x1 = nn.Conv3d(e_dim, 256, kernel_size=1, padding=1)
 
   def forward(self, r5, r4, r3, r2, support):
     x = self.GC(r5)
@@ -39,7 +43,8 @@ class DecoderSegmentEmbedding(DecoderWithEmbedding):
     m2 = self.RF2(r2, m3)  # out: 1/4, 64
     e = self.embedding_head(F.interpolate(m3, scale_factor=(2, 1, 1), mode='trilinear'))
 
-    p2 = self.pred2(F.relu(m2) + F.interpolate(e, m2.shape[2:], mode='trilinear'))
+    e_unrolled = self.con1x1(F.relu(e))
+    p2 = self.pred2(F.relu(m2) + F.interpolate(e_unrolled, m2.shape[2:], mode='trilinear'))
     p = F.interpolate(p2, scale_factor=(1, 4, 4), mode='trilinear')
 
     return p, e
@@ -53,9 +58,9 @@ class Resnet3dEmbeddingNetwork(Resnet3dSimilarity):
 
 
 class Resnet3dSegmentEmbedding(Resnet3dSimilarity):
-  def __init__(self, tw=8, sample_size=112,n_classes=2):
+  def __init__(self, tw=8, sample_size=112,n_classes=2, e_dim=64):
     super(Resnet3dSegmentEmbedding, self).__init__(n_classes=n_classes)
     self.encoder = Encoder3d(tw, sample_size)
-    self.decoder = DecoderSegmentEmbedding(n_classes=n_classes)
+    self.decoder = DecoderSegmentEmbedding(n_classes=n_classes, e_dim=e_dim)
 
 

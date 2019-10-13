@@ -1,5 +1,10 @@
+import os
+
 import torch
 from torch.nn import functional as F
+
+from utils.Config import Config
+
 
 def smooth_l1_loss(loss):
   return torch.where(loss < 1., torch.pow(loss, 2), loss)
@@ -8,7 +13,7 @@ def make_zero_tensor(dtype, device, required_grad):
   return torch.tensor(0, dtype=dtype, device=device, requires_grad=required_grad)
 
 
-def compute_embedding_loss(embedding_map, targets):
+def compute_embedding_loss(embedding_map, targets, config_path):
   """
   Computes the embedding loss.
   :param embedding_map: Tensor of shape [N, E (embedding dimensionality), T, H, W]
@@ -16,18 +21,21 @@ def compute_embedding_loss(embedding_map, targets):
   shape (I (instances), T, H, W)
   :return: Tuple of 3 losses (only the first value has to be back-proped); the rest are for logging)
   """
+
+  assert os.path.exists(config_path)
+  config = Config(config_path)
   embedding_map = embedding_map.permute(0, 2, 3, 4, 1)  # [N, T, H, W, E]
 
   losses_variance = torch.zeros((0,), dtype=torch.float32, device=embedding_map.device)
   losses_distance = torch.zeros((0,), dtype=torch.float32, device=embedding_map.device)
   losses_regularization = torch.zeros((0,), dtype=torch.float32, device=embedding_map.device)
 
-  DELTA_VAR = 0.02  # distance of instance pixels to their respective centers
-  DELTA_DISTANCE = 0.5  # distance between centers of different instances (/2)
+  DELTA_VAR = config.float("DELTA_VAR", 0.02)  # distance of instance pixels to their respective centers
+  DELTA_DISTANCE = config.float("DELTA_DISTANCE", 0.5)  # distance between centers of different instances (/2)
 
-  W_VAR_LOSS = 0.2
-  W_DISTANCE_LOSS = 0.8
-  W_REGULARIZATION_LOSS = 1e-3
+  W_VAR_LOSS = config.float("W_VAR_LOSS",0.2)
+  W_DISTANCE_LOSS = config.float("W_DISTANCE_LOSS",0.8)
+  W_REGULARIZATION_LOSS = config.float("W_REGULARIZATION_LOSS",1e-3)
 
   # The masks have to be resized to match the size of the embedding map
   SCALE_FACTOR = 1
