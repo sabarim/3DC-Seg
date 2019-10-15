@@ -29,7 +29,7 @@ def parse_args():
                       default=False, type=bool)
   parser.add_argument('--proposal_dir', dest='proposal_dir',
                       help='path to proposals',
-                      default="results/converted_proposals/thresh-0-all_fields/", type=str)
+                      default="/globalwork/mahadevan/vision/davis-unsupervised/results/converted_proposals/thresh-0-all_fields/", type=str)
   parser.add_argument('--remove_gt_proposal', dest='remove_gt_proposal',
                       help='remove the gt proposal randomly',
                       default=False, type=bool)

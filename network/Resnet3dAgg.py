@@ -90,6 +90,10 @@ class Encoder101(Encoder):
     self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
     self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
+class Encoder2plus1d(Encoder):
+  def __init__(self, tw = 16, sample_size = 112):
+    super(Encoder2plus1d, self).__init__(tw, sample_size)
+    
 
 class Decoder3d(nn.Module):
   def __init__(self, n_classes=2):
