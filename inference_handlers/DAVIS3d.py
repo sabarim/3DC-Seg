@@ -24,8 +24,8 @@ def infer_DAVIS3d(dataloader, model, criterion, writer, args):
   # switch to evaluate mode
   model.eval()
   end = time.time()
-  # for seq in dataloader.dataset.get_video_ids():
-  for seq in ['dogs-jump']:
+  for seq in dataloader.dataset.get_video_ids():
+  # for seq in ['horsejump-high']:
     dataloader.dataset.set_video_id(seq)
     ious_video = AverageMeter()
     all_preds = {}
@@ -43,10 +43,10 @@ def infer_DAVIS3d(dataloader, model, criterion, writer, args):
         frame_id = clip_frames[i]
         if frame_id in all_preds:
           all_preds[frame_id] += [pred[0, :, i].data.cpu()]
-          # all_e[frame_id] += [pred_extra[0, :, i].data.cpu()]
+          all_e[frame_id] += [pred_extra[0, :, i].data.cpu()]
         else:
           all_preds[frame_id] = [pred[0, :, i].data.cpu()]
-          # all_e[frame_id] = [pred_extra[0, :, i].data.cpu()]
+          all_e[frame_id] = [pred_extra[0, :, i].data.cpu()]
 
         if frame_id not in all_targets:
           all_targets[frame_id] = input_dict['target'][0, 0, i].data.cpu()
@@ -60,8 +60,8 @@ def infer_DAVIS3d(dataloader, model, criterion, writer, args):
     print('Sequence {}\t IOU {iou}'.format(input_dict['info']['name'], iou=iou))
     ious.update(iou, 1)
 
-    # results_extra = torch.stack([torch.stack(val).mean(dim=0) for key, val in all_e.items()])
-    save_results(results, None, info, os.path.join('results', args.network_name))
+    results_extra = torch.stack([torch.stack(val).mean(dim=0) for key, val in all_e.items()])
+    save_results(results, results_extra.permute(1,0,2,3), info, os.path.join('results', args.network_name))
 
   print('Finished Inference Loss {losses.avg:.5f} IOU {iou.avg: 5f}'
         .format(losses=losses, iou=ious))
@@ -98,6 +98,9 @@ def save_results(pred, pred_extra, info, results_path):
   pred = pred.data.cpu().numpy()
   # make hard label
   pred = np.argmax(pred, axis=1).astype(np.uint8)
+  e_path = os.path.join(results_path, 'embeddings')
+  if not os.path.exists(e_path):
+    os.makedirs(e_path)
 
   (lh, uh), (lw, uw) = info['pad']
   for f in range(len(pred)):
@@ -108,9 +111,12 @@ def save_results(pred, pred_extra, info, results_path):
       os.makedirs(results_path)
     img_M.save(os.path.join(results_path, '{:05d}.png'.format(f)))
 
-    # e = pred_extra[f, lh[0]:-uh[0], lw[0]:-uw[0]] if pred_extra is not None else None
-    # if e is not None:
-    #   e.numpy().dump(os.path.join(results_path, '{:05d}.pickle'.format(f)))
+  e = pred_extra[:, :, lh[0]:-uh[0], lw[0]:-uw[0]] if pred_extra is not None else None
+  e_dict = {"embeddings": e, 'frames': list(range(len(pred)))}
+  # if e is not None:
+  #   e.numpy().dump(os.path.join(results_path, '{:05d}.pickle'.format(f)))
+  # with open(os.path.join(e_path, 'clip_{:05d}_{:05d}.pickle'.format(0, len(pred))), 'wb') as f:
+  #   pickle.dump(e_dict, f)
 
 
 def save_per_clip(iter, e, info, results_path):

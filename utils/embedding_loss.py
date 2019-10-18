@@ -23,6 +23,8 @@ def compute_embedding_loss(embedding_map, targets, config_path):
   """
 
   assert os.path.exists(config_path)
+  # IMPORTANT: the first instance represents the background
+  targets = targets[:, 1:]
   config = Config(config_path)
   embedding_map = embedding_map.permute(0, 2, 3, 4, 1)  # [N, T, H, W, E]
 

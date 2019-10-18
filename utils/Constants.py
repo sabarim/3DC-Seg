@@ -1,6 +1,10 @@
 DAVIS_ROOT = '/globalwork/mahadevan/mywork/data/DAVIS17/DAVIS'
 YOUTUBEVOS_ROOT = '/globalwork/data/youtube-vos/'
 COCO_ROOT = '/globalwork/mahadevan/mywork/data/coco/'
+network_models = {0:"RGMP", 1:"FeatureAgg3d", 2: "FeatureAgg3dMergeTemporal", 3: "FeatureAgg3dMulti",
+                  4: "FeatureAgg3dMulti101", 5: "Resnet3d", 6: "Resnet3dPredictOne", 7: "Resnet3dMaskGuidance",
+                  8: "SiamResnet3d", 9:"Resnet3dNonLocal", 10: "Resnet3dSimilarity", 11:"Resnet3dEmbeddingNetwork",
+                  12: "Resnet3dSegmentEmbedding", 13: "Resnet3dSpatialEmbedding"}
 #DAVIS_ROOT = '/disk2/data/DAVIS/'
 PALETTE = [
   0, 0, 0,
@@ -38,3 +42,4 @@ class font:
    BOLD = '\033[1m'
    UNDERLINE = '\033[4m'
    END = '\033[0m'
+

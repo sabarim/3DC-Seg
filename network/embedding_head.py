@@ -77,13 +77,14 @@ class NonLocalBlock3DWithDownsampling(nn.Module):
 
 
 class NonlocalOffsetEmbeddingHead(nn.Module):
-    def __init__(self, in_channels, nonlocal_inter_channels, embedding_size, downsampling_factor):
+    def __init__(self, in_channels, nonlocal_inter_channels, embedding_size, downsampling_factor, add_spatial_coord=True):
         super(self.__class__, self).__init__()
 
         self.nonlocal_block = NonLocalBlock3DWithDownsampling(in_channels, nonlocal_inter_channels, downsampling_factor)
         self.conv_offset = nn.Conv3d(in_channels + 3, embedding_size, kernel_size=3, stride=1, padding=1, bias=False)
 
         self.embedding_size = embedding_size
+        self.add_spatial_coord = add_spatial_coord
 
     def forward(self, x):
         """
@@ -96,7 +97,7 @@ class NonlocalOffsetEmbeddingHead(nn.Module):
 
         # comment: t_scale = 1/(H/T): eg:-352/8
         grid = self.nonlocal_block.create_spatiotemporal_grid(
-            H, W, T, 0.028, x.dtype, x.device).unsqueeze(0).expand(N, -1, -1, -1, -1)  # [N, 3, 1, 1, 1]
+            H, W, T, 0.33, x.dtype, x.device).unsqueeze(0).expand(N, -1, -1, -1, -1)  # [N, 3, 1, 1, 1]
         zeros = torch.zeros(N, C-3, T, H, W, dtype=x.dtype, device=x.device)
         grid_cat = torch.cat((grid, zeros), dim=1)
 
@@ -116,4 +117,4 @@ class NonlocalOffsetEmbeddingHead(nn.Module):
         else:  # embedding size == 1
             grid_cat = torch.tensor(0, dtype=x.dtype, device=x.device)
 
-        return x + grid_cat.detach()
+        return x + grid_cat.detach() if self.add_spatial_coord else x

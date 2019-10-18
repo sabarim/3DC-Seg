@@ -7,9 +7,9 @@ from torch.nn import functional as F
 
 
 class DecoderWithEmbedding(Decoder3d):
-  def __init__(self, n_classes=2, e_dim = 64):
+  def __init__(self, n_classes=2, e_dim = 64, add_spatial_coord=True):
     super(DecoderWithEmbedding, self).__init__(n_classes)
-    self.embedding_head = NonlocalOffsetEmbeddingHead(256, 128, e_dim, downsampling_factor=2)
+    self.embedding_head = NonlocalOffsetEmbeddingHead(256, 128, e_dim, downsampling_factor=2, add_spatial_coord=add_spatial_coord)
 
   def forward(self, r5, r4, r3, r2, support):
     x = self.GC(r5)
@@ -19,7 +19,7 @@ class DecoderWithEmbedding(Decoder3d):
     m4 = self.RF4(r4, m5)  # out: 1/16, 64
     m3 = self.RF3(r3, m4)  # out: 1/8, 64
     m2 = self.RF2(r2, m3)  # out: 1/4, 64
-    e = self.embedding_head(F.interpolate(m3, scale_factor=(2,1,1), mode='trilinear'))
+    e = self.embedding_head(F.interpolate(F.relu(m2), scale_factor=(1,0.5,0.5), mode='trilinear'))
 
     p2 = self.pred2(F.relu(m2))
     p = F.interpolate(p2, scale_factor=(1, 4, 4), mode='trilinear')
@@ -62,5 +62,12 @@ class Resnet3dSegmentEmbedding(Resnet3dSimilarity):
     super(Resnet3dSegmentEmbedding, self).__init__(n_classes=n_classes)
     self.encoder = Encoder3d(tw, sample_size)
     self.decoder = DecoderSegmentEmbedding(n_classes=n_classes, e_dim=e_dim)
+
+
+class Resnet3dSpatialEmbedding(Resnet3dSimilarity):
+  def __init__(self, tw=8, sample_size=112,n_classes=2, e_dim=64):
+    super(Resnet3dSpatialEmbedding, self).__init__(n_classes=n_classes)
+    self.encoder = Encoder3d(tw, sample_size)
+    self.decoder = DecoderWithEmbedding(e_dim=e_dim, add_spatial_coord=False)
 
 
