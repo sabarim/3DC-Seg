@@ -5,7 +5,7 @@ from torchvision.models.segmentation import deeplabv3_resnet101, fcn_resnet101
 from network.Modules import GC3d, Refine3d
 from network.NonLocal import NONLocalBlock3D
 from network.RGMP import Encoder
-from network.Resnet3d import resnet50
+from network.Resnet3d import resnet50, resnet152_csn_ip, resnet152_csn_ir
 from network.models import BaseNetwork
 from network.r2plus1d.extract import r2plus1d_34
 
@@ -128,6 +128,33 @@ class Encoder2plus1d(Encoder3d):
 
     return r5, r4, r3, r2
 
+class Encoder3d_csn_ip(Encoder3d):
+  def __init__(self, tw = 16, sample_size = 112):
+    super(Encoder3d_csn_ip, self).__init__(tw, sample_size)
+    resnet = resnet152_csn_ip(sample_size = sample_size, sample_duration = tw)
+    self.resnet = resnet
+    self.conv1 = resnet.conv1
+    self.bn1 = resnet.bn1
+    self.relu = resnet.relu  # 1/2, 64
+
+    self.layer1 = resnet.layer1  # 1/4, 256
+    self.layer2 = resnet.layer2  # 1/8, 512
+    self.layer3 = resnet.layer3  # 1/16, 1024
+    self.layer4 = resnet.layer4  # 1/32, 2048
+
+class Encoder3d_csn_ir(Encoder3d):
+  def __init__(self, tw = 16, sample_size = 112):
+    super(Encoder3d_csn_ir, self).__init__(tw, sample_size)
+    resnet = resnet152_csn_ir(sample_size = sample_size, sample_duration = tw)
+    self.resnet = resnet
+    self.conv1 = resnet.conv1
+    self.bn1 = resnet.bn1
+    self.relu = resnet.relu  # 1/2, 64
+
+    self.layer1 = resnet.layer1  # 1/4, 256
+    self.layer2 = resnet.layer2  # 1/8, 512
+    self.layer3 = resnet.layer3  # 1/16, 1024
+    self.layer4 = resnet.layer4  # 1/32, 2048
 
 class Decoder3d(nn.Module):
   def __init__(self, n_classes=2):
@@ -308,3 +335,14 @@ class Resnet2plus1d(Resnet3d):
     super(Resnet2plus1d, self).__init__(tw, sample_size)
     self.encoder = Encoder2plus1d(tw, sample_size)
     self.decoder = Decoder2plus1d()
+
+class Resnet3dChannelSeparated_ip(Resnet3d):
+  def __init__(self, tw=16, sample_size = 112):
+    super(Resnet3dChannelSeparated_ip, self).__init__(tw, sample_size)
+    self.encoder = Encoder3d_csn_ip(tw, sample_size)
+
+class Resnet3dChannelSeparated_ir(Resnet3d):
+  def __init__(self, tw=16, sample_size = 112):
+    super(Resnet3dChannelSeparated_ir, self).__init__(tw, sample_size)
+    self.encoder = Encoder3d_csn_ir(tw, sample_size)
+

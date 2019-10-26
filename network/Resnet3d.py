@@ -97,6 +97,55 @@ class Bottleneck(nn.Module):
 
         return out
 
+class Bottleneck_depthwise_ip(nn.Module):
+    expansion = 4
+
+    def __init__(self, inplanes, planes, stride=1, downsample=None):
+        super(Bottleneck, self).__init__()
+        self.conv1 = nn.Conv3d(inplanes, planes, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm3d(planes)
+        self.conv2 = nn.Conv3d(planes, planes, kernel_size=1, bias=False)
+        self.bn2 = nn.BatchNorm3d(planes)
+        self.conv3 = nn.Conv3d(planes, planes, kernel_size=3, stride=stride,
+                               padding=1, bias=False, groups = planes)
+        self.bn3 = nn.BatchNorm3d(planes)
+        self.conv4 = nn.Conv3d(planes, planes * 4, kernel_size=1, bias=False)
+        self.bn4 = nn.BatchNorm3d(planes * 4)
+        self.relu = nn.ReLU(inplace=True)
+        self.downsample = downsample
+        self.stride = stride
+
+    def forward(self, x):
+        residual = x
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+
+        out = self.conv2(out)
+        out = self.bn2(out)
+        out = self.relu(out)
+
+        out = self.conv3(out)
+        out = self.bn3(out)
+        out = self.relu(out)
+
+        out = self.conv4(out)
+        out = self.bn4(out)
+
+        if self.downsample is not None:
+            residual = self.downsample(x)
+
+        out += residual
+        out = self.relu(out)
+
+        return out
+
+class Bottleneck_depthwise_ir(nn.Module):
+    def __init__(self, inplanes, planes, stride=1, downsample=None):
+        super(Bottleneck_depthwise_ir, self).__init__()
+        self.conv2 = nn.Conv3d(planes, planes, kernel_size=3, stride=stride,
+                               padding=1, bias=False, groups=planes)
 
 class ResNet(nn.Module):
 
@@ -231,3 +280,16 @@ def resnet200(**kwargs):
     """
     model = ResNet(Bottleneck, [3, 24, 36, 3], **kwargs)
     return model
+
+def resnet152_csn_ip(**kwargs):
+    """Constructs a channel-separated ResNet-152 model with perserved interactions.
+    """
+    model = ResNet(Bottleneck_depthwise_ip, [3, 8, 36, 3], **kwargs)
+    return model
+
+def resnet152_csn_ir(**kwargs):
+    """Constructs a channel-separated ResNet-152 model with reduced interactions.
+    """
+    model = ResNet(Bottleneck_depthwise_ir, [3, 8, 36, 3], **kwargs)
+    return model
+

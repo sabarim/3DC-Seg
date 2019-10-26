@@ -22,7 +22,7 @@ from utils.util import iou_fixed, get_lr_schedulers, show_image_summary, get_mod
 
 network_models = {0:"RGMP", 1:"FeatureAgg3d", 2: "FeatureAgg3dMergeTemporal", 3: "FeatureAgg3dMulti",
                   4: "FeatureAgg3dMulti101", 5: "Resnet3d", 6: "Resnet3dPredictOne", 7: "Resnet3dMaskGuidance",
-                  8: "SiamResnet3d", 9:"Resnet3dNonLocal", 10: "Resnet2plus1d"}
+                  8: "SiamResnet3d", 9:"Resnet3dNonLocal", 10: "Resnet2plus1d", 11:"Resnet3dChannelSeparated_ip", 12: "Resnet3dChannelSeparated_ir"}
 
 def train(train_loader, model, criterion, optimizer, epoch, foo):
   """
