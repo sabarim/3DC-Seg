@@ -7,7 +7,7 @@ from network.NonLocal import NONLocalBlock3D
 from network.RGMP import Encoder
 from network.Resnet3d import resnet50
 from network.models import BaseNetwork
-
+from network.r2plus1d.extract import r2plus1d_34
 
 class Encoder3d(Encoder):
   def __init__(self, tw = 16, sample_size = 112):
@@ -90,10 +90,44 @@ class Encoder101(Encoder):
     self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
     self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
-class Encoder2plus1d(Encoder):
+class Encoder2plus1d(Encoder3d):
   def __init__(self, tw = 16, sample_size = 112):
     super(Encoder2plus1d, self).__init__(tw, sample_size)
-    
+    resnet = r2plus1d_34(num_classes = 400)
+    self.resnet = resnet
+    self.conv1 = resnet.stem #conv, batchnorm, relu, conv, batchnorm, relu  1/2, 64
+
+    self.layer1 = resnet.layer1 #1/4, 64
+    self.layer2 = resnet.layer2 #1/8, 128
+    self.layer3 = resnet.layer3 #1/16, 256
+    self.layer4 = resnet.layer4 #1/32, 512
+
+  def forward(self, in_f, in_p):
+    assert in_f is not None or in_p is not None
+    f = (in_f * 255.0 - self.mean) / self.std
+    f /= 255.0
+
+    if in_f is None:
+      p = in_p.float()
+      if len(in_p.shape) < 4:
+        p = torch.unsqueeze(in_p, dim=1).float()  # add channel dim
+
+      x = self.conv1_p(p)
+    elif in_p is not None:
+      p = in_p.float()
+      if len(in_p.shape) < 4:
+        p = torch.unsqueeze(in_p, dim=1).float()  # add channel dim
+
+      x = self.conv1(f) + self.conv1_p(p)  # + self.conv1_n(n)
+    else:
+      x = self.conv1(f)
+    r2 = self.layer1(x)  # 1/4, 64
+    r3 = self.layer2(r2)  # 1/8, 128
+    r4 = self.layer3(r3)  # 1/16, 256
+    r5 = self.layer4(r4)  # 1/32, 512
+
+    return r5, r4, r3, r2
+
 
 class Decoder3d(nn.Module):
   def __init__(self, n_classes=2):
@@ -177,6 +211,17 @@ class Decoder3dMaskGuidance(Decoder3d):
     super(Decoder3dMaskGuidance, self).__init__()
     self.GC = GC3d(2049, 256)
 
+"""The R(2+1)D network is based on Resnet-34 instead of Resnet-50, so the channel
+numbers are different which the decoder has to take into account."""
+class Decoder2plus1d(Decoder3d):
+  def __init__(self, n_classes = 2):
+    super(Decoder2plus1d, self).__init__(n_classes)
+    mdim = 256
+    self.GC = GC3d(512, mdim)
+
+    self.RF4 = Refine3d(256, mdim)  # 1/16 -> 1/8
+    self.RF3 = Refine3d(128, mdim)  # 1/8 -> 1/4
+    self.RF2 = Refine3d(64, mdim)  # 1/4 -> 1
 
 class Resnet3d(BaseNetwork):
   def __init__(self, tw=16, sample_size=112):
@@ -258,3 +303,8 @@ class Resnet3dMaskGuidance(BaseNetwork):
     p, p2, p3, p4, p5 = self.decoder.forward(r5, r4, r3, r2, None)
     return p, p2, p3, p4, p5, r5
 
+class Resnet2plus1d(Resnet3d):
+  def __init__(self, tw=16, sample_size = 112):
+    super(Resnet2plus1d, self).__init__(tw, sample_size)
+    self.encoder = Encoder2plus1d(tw, sample_size)
+    self.decoder = Decoder2plus1d()
