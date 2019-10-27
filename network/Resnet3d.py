@@ -97,11 +97,11 @@ class Bottleneck(nn.Module):
 
         return out
 
-class Bottleneck_depthwise_ip(nn.Module):
+class Bottleneck_depthwise_ip(Bottleneck):
     expansion = 4
 
     def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(Bottleneck, self).__init__()
+        super(Bottleneck_depthwise_ip, self).__init__(inplanes, planes, stride, downsample)
         self.conv1 = nn.Conv3d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm3d(planes)
         self.conv2 = nn.Conv3d(planes, planes, kernel_size=1, bias=False)
@@ -111,9 +111,6 @@ class Bottleneck_depthwise_ip(nn.Module):
         self.bn3 = nn.BatchNorm3d(planes)
         self.conv4 = nn.Conv3d(planes, planes * 4, kernel_size=1, bias=False)
         self.bn4 = nn.BatchNorm3d(planes * 4)
-        self.relu = nn.ReLU(inplace=True)
-        self.downsample = downsample
-        self.stride = stride
 
     def forward(self, x):
         residual = x
@@ -124,7 +121,6 @@ class Bottleneck_depthwise_ip(nn.Module):
 
         out = self.conv2(out)
         out = self.bn2(out)
-        out = self.relu(out)
 
         out = self.conv3(out)
         out = self.bn3(out)
@@ -141,9 +137,9 @@ class Bottleneck_depthwise_ip(nn.Module):
 
         return out
 
-class Bottleneck_depthwise_ir(nn.Module):
+class Bottleneck_depthwise_ir(Bottleneck):
     def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(Bottleneck_depthwise_ir, self).__init__()
+        super(Bottleneck_depthwise_ir, self).__init__(inplanes, planes, stride, downsample)
         self.conv2 = nn.Conv3d(planes, planes, kernel_size=3, stride=stride,
                                padding=1, bias=False, groups=planes)
 
@@ -285,11 +281,36 @@ def resnet152_csn_ip(**kwargs):
     """Constructs a channel-separated ResNet-152 model with perserved interactions.
     """
     model = ResNet(Bottleneck_depthwise_ip, [3, 8, 36, 3], **kwargs)
+
+    #Facebook uses only a temporal kernel size of 3 in its first layer, which
+    #needs to be replicated here
+    model.conv1 = nn.Conv3d(3, 64, kernel_size=(3,7,7), stride=(1, 2, 2),
+                           padding=(3, 3, 3), bias=False)
     return model
 
 def resnet152_csn_ir(**kwargs):
     """Constructs a channel-separated ResNet-152 model with reduced interactions.
     """
     model = ResNet(Bottleneck_depthwise_ir, [3, 8, 36, 3], **kwargs)
+
+    #Facebook uses only a temporal kernel size of 3 in its first layer, which
+    #needs to be replicated here
+    model.conv1 = nn.Conv3d(3, 64, kernel_size=(3,7,7), stride=(1, 2, 2),
+                           padding=(3, 3, 3), bias=False)
     return model
+
+#Facebooks version uses special stem: (conv-batchnorm-relu) appear twice
+#instead of once at the beginning of the ResNet. Since the stem is hardcoded
+#into the Resnet class here, a hack is used to keep using this class while
+#adapting the exact architecture of Facebooks model.
+def biggerStem():
+    return nn.Sequential(
+        nn.Conv3d(3, 45, kernel_size=(1, 7, 7),
+            stride=(1, 2, 2), padding=(0, 3, 3),
+            bias=False),
+        nn.BatchNorm3d(45),
+        nn.ReLU(inplace=True),
+        nn.Conv3d(45, 64, kernel_size=(3, 1, 1),
+            stride=(1, 1, 1), padding=(1, 0, 0),
+            bias=False))
 
