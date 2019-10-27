@@ -146,7 +146,7 @@ class YoutubeVOSEmbedding(YoutubeVOSDataset):
     # input_dict['target_extra'] = {'similarity': np.concatenate(one_hot_masks, axis=1).astype(np.uint8),
     #                               'similarity_raw_mask': input_dict['target']}
     input_dict['target_extra'] = {'similarity_ref': np.concatenate(one_hot_masks, axis=1).astype(np.uint8),
-                                  'similarity_raw_mask': input_dict['target'][:, 1:]}
+                                  'similarity_raw_mask': input_dict['target']}
     input_dict['target'] = (input_dict['target'] != 0).astype(np.uint8)
 
     return input_dict

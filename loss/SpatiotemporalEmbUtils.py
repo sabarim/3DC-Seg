@@ -14,6 +14,9 @@ from PIL import Image
 
 import torch
 
+from loss.SpatialEmbLoss import calculate_iou
+from util import get_best_overlap
+
 
 class AverageMeter(object):
   def __init__(self, num_classes=1):
@@ -86,7 +89,7 @@ class Visualizer:
         ax[i].cla()
         ax[i].set_axis_off()
         ax[i].imshow(self.prepare_img(image[i]))
-    plt.draw()
+    # plt.draw()
     plt.savefig(path)
 
   @staticmethod
@@ -119,12 +122,19 @@ class Visualizer:
 class Cluster:
   def __init__(self, ):
     # coordinate map
-    xm = torch.linspace(-2, 2, 2048).view(
-      1, 1, 1, -1).expand(1, 32, 1024, 2048)
-    ym = torch.linspace(-1, 1, 1024).view(
-      1, 1, -1, 1).expand(1, 32, 1024, 2048)
-    zm = torch.linspace(0, 0.01, 32).view(
-      1, -1, 1, 1).expand(1, 32, 1024, 2048)
+    xm = torch.linspace(0, 1, 480).view(
+      1, 1, 1, -1).expand(1, 32, 480, 480)
+    ym = torch.linspace(0, 1, 480).view(
+      1, 1, -1, 1).expand(1, 32, 480, 480)
+    zm = torch.linspace(0, 0.45, 32).view(
+      1, -1, 1, 1).expand(1, 32, 480, 480)
+
+    # xm = torch.linspace(-1, 1, 1024).view(
+    #   1, 1, 1, -1).expand(1, 32, 1024, 1024)
+    # ym = torch.linspace(-1, 1, 1024).view(
+    #   1, 1, -1, 1).expand(1, 32, 1024, 1024)
+    # zm = torch.linspace(0, 0.01, 32).view(
+    #   1, -1, 1, 1).expand(1, 32, 1024, 1024)
     xyzm = torch.cat((xm, ym, zm), 0)
 
     self.xyzm = xyzm.cuda()
@@ -159,21 +169,22 @@ class Cluster:
 
     return instance_map
 
-  def cluster(self, prediction, n_sigma=1, threshold=0.5):
+  def cluster(self, prediction, n_sigma=1, threshold=0.5, iou_meter = None, in_mask = None):
 
     time, height, width = prediction.size(-3), prediction.size(-2), prediction.size(-2)
     xyzm_s = self.xyzm[:, 0:time, 0:height, 0:width]
 
     spatial_emb = torch.tanh(prediction[0:3]) + xyzm_s  # 3 x t x h x w
     sigma = prediction[3:3 + n_sigma]  # n_sigma x t x h x w
-    seed_map = torch.sigmoid(prediction[3 + n_sigma:3 + n_sigma + 1])  # 1 x t x h x w
+    # seed_map = torch.sigmoid(prediction[3 + n_sigma:3 + n_sigma + 1])  # 1 x t x h x w
+    seed_map = prediction[3 + n_sigma:3 + n_sigma + 1]  # 1 x t x h x w
 
     instance_map = torch.zeros(time, height, width).byte()
     instances = []
 
     count = 1
-    mask = seed_map > 0.5
-
+    # mask = seed_map > 0.5
+    mask = seed_map.bool()
     if mask.sum() > 128:
 
       spatial_emb_masked = spatial_emb[mask.expand_as(spatial_emb)].view(3, -1)
@@ -183,6 +194,8 @@ class Cluster:
       unclustered = torch.ones(mask.sum()).byte().cuda()
       instance_map_masked = torch.zeros(mask.sum()).byte().cuda()
 
+      # track used masks for computing iou
+      used_ids = {}
       while (unclustered.sum() > 128):
         seed = (seed_map_masked * unclustered.float()).argmax().item()
         seed_score = (seed_map_masked * unclustered.float()).max().item()
@@ -202,12 +215,28 @@ class Cluster:
             instance_mask = torch.zeros(time, height, width).int()
             instance_mask[mask.squeeze().cpu()] = proposal.int().cpu()
             instances.append(
-              {'mask': instance_mask.squeeze(), 'score': seed_score})
+              {'mask': instance_mask.squeeze(), 'score': seed_score, 'centre': center})
             count += 1
+            # calculate instance iou
+            if iou_meter is not None and in_mask.shape[1] > 0:
+              iou, id = get_best_overlap(instance_mask.numpy(),
+                               in_mask.squeeze().data.cpu().numpy())
+              if id not in used_ids:
+                used_ids[id] = calculate_iou(instance_mask.squeeze(), in_mask[id])
+              elif iou > used_ids[id]:
+                used_ids[id] = calculate_iou(instance_mask.squeeze(), in_mask[id])
+              elif -1:
+                iou_meter.update(0)
+            elif in_mask.shape[1] == 0:
+              iou_meter.update(0)
 
         unclustered[proposal] = 0
 
       instance_map[mask.squeeze().cpu()] = instance_map_masked.cpu()
+      if in_mask.shape[1] == 0 and len(instances == 0):
+        iou_meter.update(1)
+      else:
+        iou_meter.update(np.mean(list(used_ids.values())))
 
     return instance_map, instances
 

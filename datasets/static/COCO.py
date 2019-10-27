@@ -7,6 +7,7 @@ from torch.utils.data import Dataset
 from imgaug import augmenters as iaa
 import imgaug as ia
 # from datasets.Loader import register_dataset
+from util import get_one_hot_vectors
 from utils.Resize import ResizeMode, resize
 
 COCO_DEFAULT_PATH = "/globalwork/mahadevan/mywork/data/coco/"
@@ -183,8 +184,15 @@ class COCODataset(Dataset):
         mode='reflect'
       )
     ], random_order=True)
-    # create transformations of the current image
-    clip_frames, clip_masks = seq(images=clip_frames.astype(np.uint8), segmentation_maps=clip_masks)
+
+    frame_aug = raw_frame
+    mask_aug = raw_mask[...,np.newaxis]
+    # create sequence of transformations of the current image
+    for t in range(self.temporal_window-1):
+      frame_aug, mask_aug = seq(images=frame_aug.astype(np.uint8), segmentation_maps=mask_aug)
+      clip_frames[t + 1] = frame_aug
+      clip_masks[t + 1] = mask_aug[..., 0]
+    # clip_frames, clip_masks = seq(images=clip_frames.astype(np.uint8), segmentation_maps=clip_masks)
 
     return clip_frames / 255.0, clip_masks
 
@@ -273,4 +281,37 @@ class COCOInstanceDataset(COCODataset):
   def __getitem__(self, item):
     input_dict = super(COCOInstanceDataset, self).__getitem__(item)
     input_dict['masks_guidance'] = input_dict['raw_masks'][:, 0]
+    return input_dict
+
+
+class COCOEmbeddingDataset(COCODataset):
+  def __init__(self, root, is_train=False, crop_size=None,temporal_window=8, resize_mode=ResizeMode.FIXED_SIZE,
+               num_classes=2):
+    super(COCOEmbeddingDataset, self).__init__(root=root, is_train=is_train, crop_size=crop_size,
+                                         temporal_window=temporal_window, resize_mode=resize_mode)
+    self.num_classes = num_classes
+
+  def load_annotation(self, img_filename):
+    anns = self.filename_to_anns[img_filename.split("/")[-1]]
+    img = self.coco.loadImgs(anns[0]['image_id'])[0]
+
+    height = img['height']
+    width = img['width']
+
+    label = np.zeros((height, width, 1))
+    for ann in anns:
+      label[:, :, 0] += self.coco.annToMask(ann)[:, :]
+    if len(np.unique(label)) == 1:
+      print("GT contains only background.")
+
+    return label.astype(np.uint8)
+
+  def __getitem__(self, item):
+    input_dict = super(COCOEmbeddingDataset, self).__getitem__(item)
+    one_hot_masks = [get_one_hot_vectors(input_dict['target'][0, i], self.num_classes)[:, np.newaxis, :, :]
+                     for i in range(len(input_dict['target'][0]))]
+    input_dict['target_extra'] = {#'similarity_ref': np.concatenate(one_hot_masks, axis=1).astype(np.uint8),
+                                  'similarity_raw_mask': input_dict['target']}
+    input_dict['target'] = (input_dict['target'] != 0).astype(np.uint8)
+
     return input_dict

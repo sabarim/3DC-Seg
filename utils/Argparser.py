@@ -76,7 +76,7 @@ def parse_args():
   parser.add_argument('--losses', dest='losses',
                       help='losses to use while training',
                       nargs='*',
-                      default=None, type=str)
+                      default='ce', type=str)
 
   # flags for inference
   parser.add_argument('--exhaustive', dest='exhaustive',

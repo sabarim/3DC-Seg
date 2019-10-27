@@ -254,8 +254,8 @@ class Resnet3dSimilarity(Resnet3d):
       r5, r4, r3, r2 = self.encoder.forward(x, ref.unsqueeze(2))
     else:
       r5, r4, r3, r2 = self.encoder.forward(x, ref)
-    p, sim = self.decoder.forward(r5, r4, r3, r2, None)
-    return [p, sim]
+    p = self.decoder.forward(r5, r4, r3, r2, None)
+    return p
 
 
 class Resnet3dPredictOne(BaseNetwork):

@@ -73,7 +73,7 @@ def resize_and_object_crop(tensors, size):
 def resize_short_edge_and_crop(tensors, size):
   tensors_resized = resize_short_edge_to_fixed_size(tensors, size)
   # TODO: the crop size is harcoded
-  tensors_resized = random_object_crop_tensors(tensors_resized, (224, 224))
+  tensors_resized = random_object_crop_tensors(tensors_resized, (224, 512))
   return tensors_resized
 
 

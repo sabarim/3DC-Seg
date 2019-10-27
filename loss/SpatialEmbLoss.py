@@ -5,8 +5,8 @@ Licensed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by
 
 import torch
 import torch.nn as nn
-import pdb
-from utils.LovaszLoss import lovasz_hinge
+
+from loss.LovaszLoss import lovasz_hinge
 
 
 class SpatioTemporalEmbLoss(nn.Module):
@@ -22,12 +22,12 @@ class SpatioTemporalEmbLoss(nn.Module):
         self.foreground_weight = foreground_weight
 
         # coordinate map
-        xm = torch.linspace(-2, 2, 2048).view(
-            1, 1, 1,-1).expand(1, 32, 1024, 2048)
-        ym = torch.linspace(-1, 1, 1024).view(
-            1, 1, -1, 1).expand(1, 32, 1024, 2048)
-        zm = torch.linspace(0, 0.01, 32).view(
-            1, -1, 1,1).expand(1, 32, 1024, 2048)
+        xm = torch.linspace(0, 1, 480).view(
+            1, 1, 1,-1).expand(1, 8, 480, 480)
+        ym = torch.linspace(0, 1, 480).view(
+            1, 1, -1, 1).expand(1, 8, 480, 480)
+        zm = torch.linspace(0, 0.15, 8).view(
+            1, -1, 1,1).expand(1, 8, 480, 480)
         xyzm = torch.cat((xm, ym, zm), 0)
 
         self.register_buffer("xyzm", xyzm)
@@ -45,7 +45,7 @@ class SpatioTemporalEmbLoss(nn.Module):
 
             spatial_emb = torch.tanh(prediction[b, 0:3]) + xyzm_s  # 3 x t x h x w
             sigma = prediction[b, 3:3+self.n_sigma]  # n_sigma x t x h x w
-            seed_map = prediction[b, 3+self.n_sigma:3+self.n_sigma + 1]  # 1 x t x h x w
+            seed_map = torch.sigmoid(prediction[b, 3+self.n_sigma:3+self.n_sigma + 1])  # 1 x t x h x w
 
             # loss accumulators
             var_loss = 0
@@ -93,7 +93,7 @@ class SpatioTemporalEmbLoss(nn.Module):
 
                 # calculate gaussian
                 dist = torch.exp(-1*torch.sum(
-                    torch.pow(spatial_emb - center, 2)*s, 0, keepdim=True))
+                    torch.pow(spatial_emb - center, 2)*s.unsqueeze(1), 0, keepdim=True))
 
                 # apply lovasz-hinge loss
                 instance_loss = instance_loss + \

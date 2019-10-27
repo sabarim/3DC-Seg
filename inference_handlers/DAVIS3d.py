@@ -1,10 +1,9 @@
-import time
-import io
-import h5py
-import numpy as np
-import torch
 import os
 import pickle
+import time
+
+import numpy as np
+import torch
 from PIL import Image
 from scipy.misc import imresize
 from torch.nn import functional as F
@@ -12,7 +11,6 @@ from torch.nn import functional as F
 from inference_handlers.DAVIS import palette
 from network.NetworkUtil import run_forward
 from utils.AverageMeter import AverageMeter
-from utils.Loss import bootstrapped_ce_loss
 from utils.util import iou_fixed
 
 
@@ -111,8 +109,8 @@ def save_results(pred, pred_extra, info, results_path):
       os.makedirs(results_path)
     img_M.save(os.path.join(results_path, '{:05d}.png'.format(f)))
 
-  e = pred_extra[:, :, lh[0]:-uh[0], lw[0]:-uw[0]] if pred_extra is not None else None
-  e_dict = {"embeddings": e, 'frames': list(range(len(pred)))}
+  # e = pred_extra[:, :, lh[0]:-uh[0], lw[0]:-uw[0]] if pred_extra is not None else None
+  # e_dict = {"embeddings": e, 'frames': list(range(len(pred)))}
   # if e is not None:
   #   e.numpy().dump(os.path.join(results_path, '{:05d}.pickle'.format(f)))
   # with open(os.path.join(e_path, 'clip_{:05d}_{:05d}.pickle'.format(0, len(pred))), 'wb') as f:

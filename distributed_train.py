@@ -5,22 +5,18 @@ import numpy as np
 import torch
 from PIL import Image
 from tensorboardX import SummaryWriter
-from torch.nn import functional as F
 from torch.utils.data import DataLoader, RandomSampler
 
 from Forward import forward
 from inference_handlers.inference import infer
-from network.NetworkUtil import run_forward
 from network.RGMP import Encoder
 from utils.Argparser import parse_args
 # Constants
 from utils.AverageMeter import AverageMeter
 from utils.Constants import DAVIS_ROOT, network_models
-from utils.Loss import bootstrapped_ce_loss, compute_loss
 from utils.Saver import load_weights, save_checkpoint
 from utils.dataset import get_dataset
-from utils.embedding_loss import compute_embedding_loss
-from utils.util import iou_fixed, get_lr_schedulers, show_image_summary, get_model, init_torch_distributed
+from utils.util import get_lr_schedulers, show_image_summary, get_model, init_torch_distributed
 
 NUM_EPOCHS = 400
 TRAIN_KITTI = False

@@ -4,7 +4,7 @@ from datasets.DAVIS16 import DAVIS16Eval, DAVIS16PredictOneEval, DAVIS17MaskGuid
 from datasets.DAVIS3dProposalGuidance import DAVIS3dProposalGuidance, DAVIS3dProposalGuidanceEval
 from datasets.DAVISProposalGuidance import DAVISProposalGuidanceEval, DAVISProposalGuidanceInfer
 from datasets.YoutubeVOS import YoutubeVOSDataset, YoutubeVOSEmbedding
-from datasets.static.COCO import COCODataset, COCOInstanceDataset
+from datasets.static.COCO import COCODataset, COCOInstanceDataset, COCOEmbeddingDataset
 from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT
 
 
@@ -70,13 +70,18 @@ def get_dataset(args):
   elif args.train_dataset == "coco_instance":
     trainset = COCOInstanceDataset(COCO_ROOT, is_train=True, crop_size=args.crop_size,
                            resize_mode=args.resize_mode, temporal_window=args.tw)
-
+  elif args.train_dataset == "coco_embedding":
+    trainset = COCOEmbeddingDataset(COCO_ROOT, is_train=True, crop_size=args.crop_size,
+                           resize_mode=args.resize_mode, temporal_window=args.tw)
   if args.test_dataset == "coco":
     testset = COCODataset(COCO_ROOT, is_train=False, crop_size=args.crop_size,
                           resize_mode=args.resize_mode, temporal_window=args.tw)
   elif args.test_dataset == "coco_instance":
     testset = COCOInstanceDataset(COCO_ROOT, is_train=False, crop_size=args.crop_size,
                           resize_mode=args.resize_mode, temporal_window=args.tw)
+  elif args.test_dataset == "coco_embedding":
+    testset = COCOInstanceDataset(COCO_ROOT, is_train=False, crop_size=args.crop_size,
+                                  resize_mode=args.resize_mode, temporal_window=args.tw)
   elif 'davis_proposal_guidance' in args.test_dataset:
     testset = DAVISProposalGuidanceEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=args.random_instance,
                                         crop_size=args.crop_size_eval, resize_mode=args.resize_mode_eval,

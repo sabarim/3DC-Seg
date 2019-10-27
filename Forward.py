@@ -1,8 +1,9 @@
-from network.NetworkUtil import run_forward
-from utils.Loss import compute_loss
-from utils.util import iou_fixed
-from torch.nn import functional as F
 import numpy as np
+from torch.nn import functional as F
+
+from loss.Loss import compute_loss
+from network.NetworkUtil import run_forward
+from utils.util import iou_fixed
 
 
 def forward(args, criterion, input_dict, ious, model, **kwargs):

@@ -8,11 +8,11 @@ from scipy.misc import imresize
 from torch import nn
 from torch.nn import functional as F
 
+from loss.Loss import bootstrapped_ce_loss
 from network.NetworkUtil import run_forward
 from util import create_object_id_mapping, get_one_hot_vectors
 from utils.AverageMeter import AverageMeter
 from utils.Constants import DAVIS_ROOT
-from utils.Loss import bootstrapped_ce_loss
 from utils.util import iou_fixed, get_iou
 
 palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
