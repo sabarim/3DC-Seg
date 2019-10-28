@@ -85,7 +85,6 @@ def copy_fc(module, blobs):
     copy_tensor(module.weight.data, blobs, "last_out_L" + str(n) + "_w")
 
 
-# See Resnet3d.py function biggerStem() 
 # https://github.com/facebookresearch/VMZ/blob/6c925c47b7d6545b64094a083f111258b37cbeca/lib/models/r3d_model.py#L233-L275
 def copy_stem(module, blobs):
     assert isinstance(module, nn.Sequential)

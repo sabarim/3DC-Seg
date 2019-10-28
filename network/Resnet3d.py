@@ -299,10 +299,10 @@ def resnet152_csn_ir(**kwargs):
                            padding=(3, 3, 3), bias=False)
     return model
 
-#Facebooks version uses special stem: (conv-batchnorm-relu) appear twice
-#instead of once at the beginning of the ResNet. Since the stem is hardcoded
-#into the Resnet class here, a hack is used to keep using this class while
-#adapting the exact architecture of Facebooks model.
+#Facebooks version uses special stem in r2+1d network: (conv-batchnorm-relu)
+#appear twice instead of once at the beginning of the ResNet. Since the stem is
+#hardcoded into the Resnet class here, a hack is used to keep using this class
+#while adapting the exact architecture of Facebooks model.
 def biggerStem():
     return nn.Sequential(
         nn.Conv3d(3, 45, kernel_size=(1, 7, 7),

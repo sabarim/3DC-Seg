@@ -52,11 +52,17 @@ def load_weights(model, optimizer, args, model_dir, scheduler):
       elif 'pretrain' in loadepoch:
         load_name = os.path.join('saved_models', loadepoch + '.pth')
         checkpoint = load_pretrained_weights(load_name)
+      elif "csn/" in loadepoch or "2+1d" in loadepoch:
+        load_name = os.path.join('saved_models/',
+                                 '{}.pth'.format(loadepoch))
+        checkpoint = torch.load(load_name)
+        start_epoch = 0
+        checkpoint = {"model" : checkpoint, "epoch" : start_epoch}
       else:
         load_name = os.path.join('saved_models/',
                                  '{}.pth'.format(loadepoch))
         checkpoint = torch.load(load_name)
-        start_epoch = checkpoint['epoch'] + 1 if args.task == "train" else 0
+        start_epoch = checkpoint['epoch'] + 1 if (args.task == "train" and "epoch" in checkpoint) else 0
         # checkpoint["model"] = OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint["model"].items()])
       checkpoint_valid = {k: v for k, v in checkpoint['model'].items() if k in state and state[k].shape == v.shape}
       missing_keys = np.setdiff1d(list(state.keys()),list(checkpoint_valid.keys()))
