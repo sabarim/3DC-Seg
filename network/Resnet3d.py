@@ -62,12 +62,12 @@ class BasicBlock(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, dilation=1):
         super(Bottleneck, self).__init__()
         self.conv1 = nn.Conv3d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm3d(planes)
         self.conv2 = nn.Conv3d(planes, planes, kernel_size=3, stride=stride,
-                               padding=1, bias=False)
+                               padding=dilation, bias=False, dilation=dilation)
         self.bn2 = nn.BatchNorm3d(planes)
         self.conv3 = nn.Conv3d(planes, planes * 4, kernel_size=1, bias=False)
         self.bn3 = nn.BatchNorm3d(planes * 4)
@@ -111,9 +111,9 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], shortcut_type)
-        self.layer2 = self._make_layer(block, 128, layers[1], shortcut_type, stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], shortcut_type, stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], shortcut_type, stride=2)
+        self.layer2 = self._make_layer(block, 128, layers[1], shortcut_type, stride=(1,2,2), dilation = (2,1,1))
+        self.layer3 = self._make_layer(block, 256, layers[2], shortcut_type, stride=(1,2,2), dilation = (2,1,1))
+        self.layer4 = self._make_layer(block, 512, layers[3], shortcut_type, stride=(1,2,2), dilation = (2,1,1))
         last_duration = math.ceil(sample_duration / 16)
         last_size = math.ceil(sample_size / 32)
         self.avgpool = nn.AvgPool3d((last_duration, last_size, last_size), stride=1)
@@ -127,7 +127,7 @@ class ResNet(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-    def _make_layer(self, block, planes, blocks, shortcut_type, stride=1):
+    def _make_layer(self, block, planes, blocks, shortcut_type, stride=1, dilation=1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             if shortcut_type == 'A':
@@ -142,7 +142,7 @@ class ResNet(nn.Module):
                 )
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, downsample))
+        layers.append(block(self.inplanes, planes, stride, downsample, dilation))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
             layers.append(block(self.inplanes, planes))

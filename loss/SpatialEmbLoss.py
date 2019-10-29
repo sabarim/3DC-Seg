@@ -22,12 +22,12 @@ class SpatioTemporalEmbLoss(nn.Module):
         self.foreground_weight = foreground_weight
 
         # coordinate map
-        xm = torch.linspace(0, 3, 1200).view(
-            1, 1, 1,-1).expand(1, 32, 480, 1200)
+        xm = torch.linspace(0, 2, 960).view(
+            1, 1, 1,-1).expand(1, 32, 480, 960)
         ym = torch.linspace(0, 1, 480).view(
-            1, 1, -1, 1).expand(1, 32, 480, 1200)
+            1, 1, -1, 1).expand(1, 32, 480, 960)
         zm = torch.linspace(0, 0.1, 32).view(
-            1, -1, 1,1).expand(1, 32, 480, 1200)
+            1, -1, 1,1).expand(1, 32, 480, 960)
         xyzm = torch.cat((xm, ym, zm), 0)
 
         self.register_buffer("xyzm", xyzm)

@@ -75,7 +75,7 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
       loss_extra, _, _ = compute_embedding_loss(pred_extra, target_extra['similarity_ref'].cuda(), args.config_path)
     elif "spatiotemporal_embedding" in args.losses:
       iou_all_instances = AverageMeter()
-      pred_extra = F.interpolate(pred_extra, scale_factor=(1, 8, 8), mode='trilinear')
+      pred_extra = F.interpolate(pred_extra, size=target.shape[-3:], mode='trilinear')
       # spatial embedding loss expects the last channel to be a seed map, which could be the fg/bg prediction here
       # pred_spatemb = torch.cat((pred_extra.cuda(), pred_mask[:, -1:]), dim=1)
       pred_spatemb = pred_extra

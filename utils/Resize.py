@@ -126,6 +126,7 @@ def resize_short_edge_to_fixed_size(tensors, size):
   tensors_out = resize_fixed_size(tensors, scaled_size)
   return tensors_out
 
+
 def random_crop_tensors(tensors, crop_size):
   assert "image" in tensors
   h, w = tensors["image"].shape[:2]
@@ -163,7 +164,6 @@ def random_object_crop_tensors(tensors, crop_size):
   for key in tensors.keys():
     tensors_cropped[key] = tensors[key][top: top + new_h,
                            left: left + new_w]
-
   return tensors_cropped
 
 
