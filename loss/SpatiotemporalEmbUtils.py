@@ -122,19 +122,21 @@ class Visualizer:
 class Cluster:
   def __init__(self, ):
     # coordinate map
-    xm = torch.linspace(0, 1, 480).view(
-      1, 1, 1, -1).expand(1, 32, 480, 480)
-    ym = torch.linspace(0, 1, 480).view(
-      1, 1, -1, 1).expand(1, 32, 480, 480)
-    zm = torch.linspace(0, 0.45, 32).view(
-      1, -1, 1, 1).expand(1, 32, 480, 480)
+    # xm = torch.linspace(0, 1, 480).view(
+    #   1, 1, 1, -1).expand(1, 32, 480, 480)
+    # ym = torch.linspace(0, 0.4, 480).view(
+    #   1, 1, -1, 1).expand(1, 32, 480, 480)
+    # zm = torch.linspace(0, 0.45, 32).view(
+    #   1, -1, 1, 1).expand(1, 32, 480, 480)
 
-    # xm = torch.linspace(-1, 1, 1024).view(
-    #   1, 1, 1, -1).expand(1, 32, 1024, 1024)
-    # ym = torch.linspace(-1, 1, 1024).view(
-    #   1, 1, -1, 1).expand(1, 32, 1024, 1024)
-    # zm = torch.linspace(0, 0.01, 32).view(
-    #   1, -1, 1, 1).expand(1, 32, 1024, 1024)
+    # coordinate map
+    xm = torch.linspace(0, 2, 960).view(
+      1, 1, 1, -1).expand(1, 32, 480, 960)
+    ym = torch.linspace(0, 1, 480).view(
+      1, 1, -1, 1).expand(1, 32, 480, 960)
+    zm = torch.linspace(0, 0.1, 32).view(
+      1, -1, 1, 1).expand(1, 32, 480, 960)
+
     xyzm = torch.cat((xm, ym, zm), 0)
 
     self.xyzm = xyzm.cuda()
@@ -171,7 +173,7 @@ class Cluster:
 
   def cluster(self, prediction, n_sigma=1, threshold=0.5, iou_meter = None, in_mask = None):
 
-    time, height, width = prediction.size(-3), prediction.size(-2), prediction.size(-2)
+    time, height, width = prediction.size(-3), prediction.size(-2), prediction.size(-1)
     xyzm_s = self.xyzm[:, 0:time, 0:height, 0:width]
 
     spatial_emb = torch.tanh(prediction[0:3]) + xyzm_s  # 3 x t x h x w
@@ -185,7 +187,7 @@ class Cluster:
     count = 1
     # mask = seed_map > 0.5
     mask = seed_map.bool()
-    if mask.sum() > 128:
+    if mask.sum() > 128 * time:
 
       spatial_emb_masked = spatial_emb[mask.expand_as(spatial_emb)].view(3, -1)
       sigma_masked = sigma[mask.expand_as(sigma)].view(n_sigma, -1)
@@ -221,7 +223,7 @@ class Cluster:
             if iou_meter is not None and in_mask.shape[1] > 0:
               iou, id = get_best_overlap(instance_mask.numpy(),
                                in_mask.squeeze().data.cpu().numpy())
-              if id not in used_ids:
+              if id not in used_ids.keys():
                 used_ids[id] = calculate_iou(instance_mask.squeeze(), in_mask[id])
               elif iou > used_ids[id]:
                 used_ids[id] = calculate_iou(instance_mask.squeeze(), in_mask[id])
