@@ -6,6 +6,7 @@ import torch
 from PIL import Image
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler
+from torchsummary import summary
 
 from Forward import forward
 from inference_handlers.inference import infer
@@ -164,7 +165,7 @@ if __name__ == '__main__':
     trainloader = DataLoader(trainset, batch_size=args.bs, num_workers=args.num_workers,
                              sampler=train_sampler)
 
-    # print(summary(model, tuple((256,256)), batch_size=1))
+    print(summary(model, tuple((256,256)), batch_size=1))
     writer = SummaryWriter(log_dir="runs/" + args.network_name)
     optimizer = torch.optim.Adam(model.module.parameters(), lr=args.lr)
     model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval = \
