@@ -1,10 +1,11 @@
 import os
 import zipfile
+
 import numpy as np
 from PIL import Image
-from torch.utils.data import Dataset
 from imgaug import augmenters as iaa
-import imgaug as ia
+from torch.utils.data import Dataset
+
 # from datasets.Loader import register_dataset
 from util import get_one_hot_vectors
 from utils.Resize import ResizeMode, resize
@@ -17,7 +18,7 @@ ROTATION = 15
 FLIP = 40
 
 
-#@register_dataset(NAME)
+# @register_dataset(NAME)
 class COCODataset(Dataset):
   def __init__(self, root, is_train=False, crop_size=None,temporal_window=8, resize_mode=ResizeMode.FIXED_SIZE):
     self.crop_size = crop_size
@@ -183,7 +184,7 @@ class COCODataset(Dataset):
                 ]))
     seq = iaa.Sequential([
       #iaa.Fliplr(FLIP / 100.),  # horizontal flips
-      sometimes(iaa.ElasticTransformation(alpha=(90, 110), sigma=(9.0, 11.0))),
+      sometimes(iaa.ElasticTransformation(alpha=(200, 220), sigma=(17.0, 19.0))),
       iaa.Affine(
         scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
         translate_percent={"x": (-TRANSLATION, TRANSLATION), "y": (-TRANSLATION, TRANSLATION)},
@@ -218,14 +219,14 @@ class COCODataset(Dataset):
     info = {}
     info['name'] = "coco"
     info['num_frames'] = len(self.inputfile_lists)
-    num_objects = 1
-    info['num_objects'] = num_objects
     #info['shape'] = self.shape[sequence]
 
     raw_frames, raw_masks = self.read_frame(index)
     raw_frames, raw_masks = self.generate_clip(raw_frames, raw_masks)
     raw_frames = np.transpose(raw_frames, (3, 0, 1, 2))
     raw_masks = raw_masks[np.newaxis]
+
+    info['num_objects'] = len(np.unique(raw_masks))
 
     # padding size to be divide by 32
     _,_, h, w = raw_masks.shape
@@ -309,7 +310,7 @@ class COCOEmbeddingDataset(COCODataset):
 
     label = np.zeros((height, width, 1))
     for ann in anns:
-      label[:, :, 0] += self.coco.annToMask(ann)[:, :]
+      label[:, :, 0][self.coco.annToMask(ann) == 1] = (anns.index(ann) + 1)
     if len(np.unique(label)) == 1:
       print("GT contains only background.")
 
@@ -319,6 +320,7 @@ class COCOEmbeddingDataset(COCODataset):
     input_dict = super(COCOEmbeddingDataset, self).__getitem__(item)
     one_hot_masks = [get_one_hot_vectors(input_dict['target'][0, i], self.num_classes)[:, np.newaxis, :, :]
                      for i in range(len(input_dict['target'][0]))]
+    # assert (len(np.unique(input_dict['target'][:, 1:])) - input_dict['info']['num_objects']) < 2
     input_dict['target_extra'] = {#'similarity_ref': np.concatenate(one_hot_masks, axis=1).astype(np.uint8),
                                   'similarity_raw_mask': input_dict['target']}
     input_dict['target'] = (input_dict['target'] != 0).astype(np.uint8)

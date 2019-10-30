@@ -82,8 +82,8 @@ def get_dataset(args):
     testset = COCOInstanceDataset(COCO_ROOT, is_train=False, crop_size=args.crop_size,
                           resize_mode=args.resize_mode, temporal_window=args.tw)
   elif args.test_dataset == "coco_embedding":
-    from datasets.static.COCO import COCOInstanceDataset
-    testset = COCOInstanceDataset(COCO_ROOT, is_train=False, crop_size=args.crop_size,
+    from datasets.static.COCO import COCOEmbeddingDataset
+    testset = COCOEmbeddingDataset(COCO_ROOT, is_train=False, crop_size=args.crop_size,
                                   resize_mode=args.resize_mode, temporal_window=args.tw)
   elif 'davis_proposal_guidance' in args.test_dataset:
     from datasets.DAVISProposalGuidance import DAVISProposalGuidanceEval

@@ -249,7 +249,7 @@ class Resnet3dSimilarity(Resnet3d):
     super(Resnet3dSimilarity, self).__init__()
     self.decoder = DecoderSimilarity(n_classes)
 
-  def forward(self, x, ref):
+  def forward(self, x, ref = None):
     if ref is not None and len(ref.shape) == 4:
       r5, r4, r3, r2 = self.encoder.forward(x, ref.unsqueeze(2))
     else:
