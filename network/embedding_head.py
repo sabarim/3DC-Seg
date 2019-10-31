@@ -36,7 +36,7 @@ class NonLocalBlock3DWithDownsampling(nn.Module):
 
     @staticmethod
     def create_spatiotemporal_grid(height, width, time, t_scale, dtype=torch.float32, device="cpu"):
-        x = (torch.arange(width, dtype=dtype, device=device)) / ((width - 1) * 0.5) - 1
+        x = (torch.arange(width, dtype=dtype, device=device)) / ((width - 1) * 0.25) - 2
         y = (torch.arange(height, dtype=dtype, device=device)) / ((height - 1) * 0.5) - 1
         t = ((torch.arange(time, dtype=dtype, device=device)) / ((time - 1) * 0.5) - 1) * t_scale
         return torch.stack(torch.meshgrid(t, y, x), dim=0)  # [3, T, H, W]
@@ -97,7 +97,7 @@ class NonlocalOffsetEmbeddingHead(nn.Module):
 
         # comment: t_scale = 1/(H/T): eg:-352/8
         grid = self.nonlocal_block.create_spatiotemporal_grid(
-            H, W, T, 0.33, x.dtype, x.device).unsqueeze(0).expand(N, -1, -1, -1, -1)  # [N, 3, 1, 1, 1]
+            H, W, T, 0.1, x.dtype, x.device).unsqueeze(0).expand(N, -1, -1, -1, -1)  # [N, 3, 1, 1, 1]
         zeros = torch.zeros(N, C-3, T, H, W, dtype=x.dtype, device=x.device)
         grid_cat = torch.cat((grid, zeros), dim=1)
 

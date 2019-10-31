@@ -130,14 +130,13 @@ class Cluster:
     #   1, -1, 1, 1).expand(1, 32, 480, 480)
 
     # coordinate map
-    xm = torch.linspace(0, 2, 960).view(
+    x = torch.linspace(0, 2, 960).view(
       1, 1, 1, -1).expand(1, 32, 480, 960)
-    ym = torch.linspace(0, 1, 480).view(
+    y = torch.linspace(0, 1, 480).view(
       1, 1, -1, 1).expand(1, 32, 480, 960)
-    zm = torch.linspace(0, 0.1, 32).view(
+    t = torch.linspace(0, 0.1, 32).view(
       1, -1, 1, 1).expand(1, 32, 480, 960)
-
-    xyzm = torch.cat((xm, ym, zm), 0)
+    xyzm = torch.cat((t, y, x), 0)
 
     self.xyzm = xyzm.cuda()
 

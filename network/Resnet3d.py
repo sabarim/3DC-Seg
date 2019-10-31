@@ -111,7 +111,7 @@ class ResNet(nn.Module):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], shortcut_type)
-        self.layer2 = self._make_layer(block, 128, layers[1], shortcut_type, stride=(1,2,2), dilation = (2,1,1))
+        self.layer2 = self._make_layer(block, 128, layers[1], shortcut_type, stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], shortcut_type, stride=(1,2,2), dilation = (2,1,1))
         self.layer4 = self._make_layer(block, 512, layers[3], shortcut_type, stride=(1,2,2), dilation = (2,1,1))
         last_duration = math.ceil(sample_duration / 16)
