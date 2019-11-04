@@ -7,19 +7,21 @@ from PIL import Image
 from scipy.misc import imresize
 
 from datasets.DAVIS import DAVIS
+from util import get_one_hot_vectors
 from utils.Resize import ResizeMode, resize
 
 
 class YoutubeVOSDataset(DAVIS):
   def __init__(self, root, imset='train', is_train=False,
                random_instance=False, crop_size=None,temporal_window=3, min_temporal_gap=2,
-               max_temporal_gap=8, resize_mode=ResizeMode.FIXED_SIZE):
+               max_temporal_gap=8, resize_mode=ResizeMode.FIXED_SIZE, num_classes=2):
     # maintain a list of files for each video
     self.video_frames = {}
+    self.num_classes = num_classes
     super(YoutubeVOSDataset, self).__init__(root, imset=imset, is_train=is_train, random_instance=random_instance,
                                             crop_size=crop_size, temporal_window=temporal_window,
                                             min_temporal_gap=min_temporal_gap, max_temporal_gap=max_temporal_gap,
-                                            resize_mode=resize_mode)
+                                            resize_mode=resize_mode, num_classes=num_classes)
 
   def set_paths(self, imset, resolution, root):
     if imset == 'train':
@@ -83,12 +85,14 @@ class YoutubeVOSDataset(DAVIS):
     except:
       mask_file = os.path.join(self.mask_dir, video, '00000.png')
       raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
-
-    raw_masks = (raw_mask == instance_id).astype(np.uint8) if instance_id is not None \
-      else (raw_mask != 0).astype(np.uint8)
+    mask_void = (raw_mask == 255).astype(np.uint8)
+    if self.num_classes == 2:
+      raw_masks = (raw_mask == instance_id).astype(np.uint8) if instance_id is not None \
+        else (raw_mask != 0).astype(np.uint8)
+    else:
+      raw_masks = raw_mask
     tensors_resized = resize({"image": raw_frames, "mask": raw_masks}, self.resize_mode, shape)
-    # print("Max value of image {}".format(np.max(tensors_resized['image'])))
-    return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["mask"], tensors_resized["mask"]
+    return tensors_resized["image"] / 255.0, tensors_resized["mask"], tensors_resized["mask"], tensors_resized["mask"], mask_void
 
   def get_support_indices(self, index, sequence):
     # in youtube-vos index does not correspond to the file index
@@ -120,5 +124,30 @@ class YoutubeVOSDataset(DAVIS):
     input_dict = super(YoutubeVOSDataset, self).__getitem__(item)
     del input_dict['masks_guidance']
     input_dict['target'] = input_dict['raw_masks']
+    return input_dict
+
+
+class YoutubeVOSEmbedding(YoutubeVOSDataset):
+  def __init__(self, root, imset='train', is_train=False,
+               random_instance=False, crop_size=None,temporal_window=3, min_temporal_gap=2,
+               max_temporal_gap=8, resize_mode=ResizeMode.FIXED_SIZE, num_classes=10):
+    super(YoutubeVOSEmbedding, self).__init__(root, imset=imset, is_train=is_train, random_instance=random_instance,
+                                            crop_size=crop_size, temporal_window=temporal_window,
+                                            min_temporal_gap=min_temporal_gap, max_temporal_gap=max_temporal_gap,
+                                            resize_mode=resize_mode, num_classes=num_classes)
+
+  def __getitem__(self, item):
+    input_dict = super(YoutubeVOSEmbedding, self).__getitem__(item)
+    one_hot_masks = [get_one_hot_vectors(input_dict['target'][0, i], self.num_classes)[:, np.newaxis, :, :]
+                     for i in range(len(input_dict['target'][0]))]
+    # one_hot_masks = get_one_hot_vectors(input_dict['target'][0, 0], self.num_classes)
+
+    # add one hot vector masks as extra target
+    # input_dict['target_extra'] = {'similarity': np.concatenate(one_hot_masks, axis=1).astype(np.uint8),
+    #                               'similarity_raw_mask': input_dict['target']}
+    input_dict['target_extra'] = {'similarity_ref': np.concatenate(one_hot_masks, axis=1).astype(np.uint8),
+                                  'similarity_raw_mask': input_dict['target']}
+    input_dict['target'] = (input_dict['target'] != 0).astype(np.uint8)
+
     return input_dict
 

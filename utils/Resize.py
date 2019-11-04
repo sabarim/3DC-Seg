@@ -1,6 +1,5 @@
 import random
 from enum import Enum, unique
-
 import cv2
 import numpy as np
 from scipy.misc import imresize
@@ -26,7 +25,6 @@ class ResizeMode(Enum):
 def resize(tensors, resize_mode, size):
   if resize_mode == ResizeMode.UNCHANGED:
     return tensors
-
   crop_size = preprocess_size(size)
   if resize_mode == ResizeMode.RANDOM_RESIZE_AND_CROP:
     return random_resize_and_crop(tensors, crop_size)
@@ -73,7 +71,7 @@ def resize_and_object_crop(tensors, size):
 def resize_short_edge_and_crop(tensors, size):
   tensors_resized = resize_short_edge_to_fixed_size(tensors, size)
   # TODO: the crop size is harcoded
-  tensors_resized = random_object_crop_tensors(tensors_resized, (224, 224))
+  tensors_resized = random_object_crop_tensors(tensors_resized, (size[0], size[1]))
   return tensors_resized
 
 
@@ -123,10 +121,11 @@ def resize_short_edge_to_fixed_size(tensors, size):
   h = img.shape[0]
   w = img.shape[1]
   shorter_side = np.min([h, w])
-  scale_factor = size[0] / shorter_side
+  scale_factor = np.min(size) / shorter_side
   scaled_size = np.around(np.array(img.shape[:2]) * scale_factor).astype(np.int)
   tensors_out = resize_fixed_size(tensors, scaled_size)
   return tensors_out
+
 
 def random_crop_tensors(tensors, crop_size):
   assert "image" in tensors
@@ -165,7 +164,6 @@ def random_object_crop_tensors(tensors, crop_size):
   for key in tensors.keys():
     tensors_cropped[key] = tensors[key][top: top + new_h,
                            left: left + new_w]
-
   return tensors_cropped
 
 

@@ -190,7 +190,7 @@ class Decoder3d(nn.Module):
 
     p = F.interpolate(p2, scale_factor=(1,4,4), mode='trilinear')
 
-    return p, p2, p3, p4, p5
+    return p
 
 
 class Decoder3dNonLocal(Decoder3d):
@@ -215,7 +215,7 @@ class Decoder3dNonLocal(Decoder3d):
 
     p = F.interpolate(p2, scale_factor=(1, 4, 4), mode='trilinear')
 
-    return p, p2, p3, p4, p5
+    return p
 
 
 class DecoderSiam3d(Decoder3dNonLocal):
@@ -231,6 +231,27 @@ class DecoderSiam3d(Decoder3dNonLocal):
     # r5 = F.relu(self.conv1(r5))
     # r5 = self.conv_non_local(F.relu(r5))
     return super(DecoderSiam3d, self).forward(r5, r4, r3, r2, support)
+
+
+class DecoderSimilarity(Decoder3dNonLocal):
+  def __init__(self, n_classes=2):
+    super(DecoderSimilarity, self).__init__(n_classes)
+    self.conv_non_local = NONLocalBlock3D(256, return_sim=True, sub_sample=False)
+
+  def forward(self, r5, r4, r3, r2, support):
+    x = self.GC(r5)
+    r = self.convG1(F.relu(x))
+    r = self.convG2(F.relu(r))
+    m5 = x + r  # out: 1/32, 64
+    m4 = self.RF4(r4, m5)  # out: 1/16, 64
+    m3 = self.RF3(r3, m4)  # out: 1/8, 64
+    m3_nl, f = self.conv_non_local(m3)
+    m2 = self.RF2(r2, F.relu(m3_nl))  # out: 1/4, 64
+
+    p2 = self.pred2(F.relu(m2))
+    p = F.interpolate(p2, scale_factor=(1, 4, 4), mode='trilinear')
+
+    return p, f
 
 
 class Decoder3dMaskGuidance(Decoder3d):
@@ -261,8 +282,8 @@ class Resnet3d(BaseNetwork):
       r5, r4, r3, r2 = self.encoder.forward(x, ref.unsqueeze(2))
     else:
       r5, r4, r3, r2 = self.encoder.forward(x, ref)
-    p, p2, p3, p4, p5 = self.decoder.forward(r5, r4, r3, r2, None)
-    return p, p2, p3, p4, p5, r5
+    p = self.decoder.forward(r5, r4, r3, r2, None)
+    return [p]
 
 
 class SiamResnet3d(BaseNetwork):
@@ -271,8 +292,8 @@ class SiamResnet3d(BaseNetwork):
     self.encoder = Encoder3d(tw, sample_size)
     self.encoder2d = Encoder()
     self.decoder = DecoderSiam3d()
-    self.freeze_encoder3d()
-    self.freeze_encoder2d()
+    #self.freeze_encoder3d()
+    #self.freeze_encoder2d()
 
   def freeze_encoder3d(self):
     print("Freezing the weights for Encoder3d")
@@ -289,14 +310,28 @@ class SiamResnet3d(BaseNetwork):
   def forward(self, x, ref):
     r5_ref, r4_ref, r3_ref, r2_ref = self.encoder2d.forward(x[:, :, 0], ref)
     r5, r4, r3, r2 = self.encoder.forward(x[:, :, 1:], None)
-    p, p2, p3, p4, p5 = self.decoder.forward(r5, r4, r3, r2, r5_ref)
-    return p, p2, p3, p4, p5, r5
+    p = self.decoder.forward(r5, r4, r3, r2, r5_ref)
+    return [p]
 
 
 class Resnet3dNonLocal(Resnet3d):
   def __init__(self, n_classes=2):
     super(Resnet3dNonLocal, self).__init__()
     self.decoder = Decoder3dNonLocal(n_classes)
+
+
+class Resnet3dSimilarity(Resnet3d):
+  def __init__(self, n_classes=2):
+    super(Resnet3dSimilarity, self).__init__()
+    self.decoder = DecoderSimilarity(n_classes)
+
+  def forward(self, x, ref = None):
+    if ref is not None and len(ref.shape) == 4:
+      r5, r4, r3, r2 = self.encoder.forward(x, ref.unsqueeze(2))
+    else:
+      r5, r4, r3, r2 = self.encoder.forward(x, ref)
+    p = self.decoder.forward(r5, r4, r3, r2, None)
+    return p
 
 
 class Resnet3dPredictOne(BaseNetwork):

@@ -174,12 +174,11 @@ def write_output_mask(proposals, path):
     save_mask(result_mask, path)
 
 
-def get_one_hot_vectors(mask):
-    num_objects = np.setdiff1d(np.unique(mask), [0])
-    one_hot_mask = np.zeros((num_objects.max(), ) + mask.shape)
-
-    for i in num_objects:
-        one_hot_mask[i-1] = (mask == i).astype(np.uint8)
+def get_one_hot_vectors(mask, num_objects = None):
+    num_objects = np.max(mask) if num_objects is None else num_objects
+    one_hot_mask = np.zeros((num_objects, ) + mask.shape)
+    for i in range(num_objects):
+        one_hot_mask[i] = (mask == i).astype(np.uint8)
 
     return one_hot_mask
 

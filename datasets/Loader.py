@@ -1,4 +1,4 @@
-from core.Util import import_submodules
+from datasets.utils.Util import import_submodules
 
 _registered_datasets = {}
 

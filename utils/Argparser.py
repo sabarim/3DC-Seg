@@ -27,6 +27,9 @@ def parse_args():
   parser.add_argument('--save_results', dest='save_results',
                       help='save predictions during inference',
                       default=False, type=bool)
+  parser.add_argument('--save_per_clip', dest='save_per_clip',
+                      help='save embeddings per clip',
+                      default=False, type=bool)
   parser.add_argument('--proposal_dir', dest='proposal_dir',
                       help='path to proposals',
                       default="/globalwork/mahadevan/vision/davis-unsupervised/results/converted_proposals/thresh-0-all_fields/", type=str)
@@ -70,6 +73,10 @@ def parse_args():
                       help='augmentors to use',
                       nargs='*',
                       default=None, type=str)
+  parser.add_argument('--losses', dest='losses',
+                      help='losses to use while training',
+                      nargs='*',
+                      default='ce', type=str)
 
   # flags for inference
   parser.add_argument('--exhaustive', dest='exhaustive',
@@ -139,6 +146,16 @@ def parse_args():
   parser.add_argument('--show_image_summary', dest='show_image_summary',
                       help='show image summary',
                       default=False, type=bool)
+  parser.add_argument('--local_rank', type=int, default=0)
+
+  # embedding
+  parser.add_argument('--embedding_dim', dest='embedding_dim',
+                      help='embedding dimension', default=64, type=int)
+
+  # config file for parameters
+  parser.add_argument('--config_path', dest='config_path',
+                      help='config file path for loss parameters', default="run_configs/param_configs/embedding_config",
+                      type=str)
 
   args = parser.parse_args()
   return args

@@ -13,7 +13,7 @@ THRESH = 0.4
 
 data_dir = "/globalwork/data/DAVIS-Unsupervised/DAVIS/"
 flow_dir = "/globalwork/data/DAVIS-Unsupervised/DAVIS/flo/"
-proposals = "/globalwork/data/DAVIS-Unsupervised/DAVIS/Annotations_Unsupervised/480p/"
+proposals = "/globalwork/data/DAVIS-Unsupervised/DAVIS/Annotations_unsupervised/480p/"
 result_folder = "results/"
 
 

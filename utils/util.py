@@ -6,6 +6,7 @@ import numpy as np
 from network.models import BaseNetwork
 from network.FeatureAgg3d import FeatureAgg3d, FeatureAgg3dMergeTemporal
 from network.Resnet3dAgg import Resnet3d
+from network.EmbeddingNetwork import Resnet3dEmbeddingNetwork
 
 
 
@@ -93,5 +94,15 @@ def get_model(args, network_models):
     params['n_classes'] = args.n_classes
   if 'tw' in fn_args:
     params['tw'] = args.tw
+  if 'e_dim' in fn_args:
+    params['e_dim'] = args.embedding_dim
   model = model_class(**params)
   return model
+
+
+def init_torch_distributed():
+  print("devices available: {}".format(torch.cuda.device_count()))
+  torch.distributed.init_process_group(
+    'nccl',
+    init_method='env://',
+  )

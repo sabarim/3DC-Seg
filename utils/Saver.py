@@ -25,13 +25,14 @@ def load_weights(model, optimizer, args, model_dir, scheduler):
       if loadepoch == 'siam':
         # transform, checkpoint provided by RGMP
         load_name2d = 'saved_models/rgmp.pth'
-        load_name3d = 'saved_models/davis16_pretrain.pth'
+        load_name3d = 'saved_models/resnet-50-kinetics.pth'
         load_name = {1: 'saved_models/youtubevos_pretrain.pth', 2: 'saved_models/rgmp.pth'}
         checkpoint2d = torch.load(load_name2d)
         checkpoint = load_pretrained_weights(load_name3d)
         encoder2d_dict = OrderedDict([(k.lower().replace('module.encoder', 'module.encoder2d'), v)
                                             for k, v in checkpoint2d.items() if "module.encoder" in k.lower()])
-        checkpoint['model'].update(encoder2d_dict)
+        #FIXME: uncomment for using rgmp pretrained weights
+        #checkpoint['model'].update(encoder2d_dict)
         # checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
       elif loadepoch == 'kinetics':
         # transform, checkpoint provided by RGMP
@@ -68,7 +69,7 @@ def load_weights(model, optimizer, args, model_dir, scheduler):
       missing_keys = np.setdiff1d(list(state.keys()),list(checkpoint_valid.keys()))
       
       if len(missing_keys) > 0:
-        print("WARN: {} keys are found missing in the loaded model weights.".format(len(missing_keys)))
+        print("WARN: {} keys are found missing in the loaded model weights.".format(missing_keys))
       for key in missing_keys:
         checkpoint_valid[key] = state[key]
 
