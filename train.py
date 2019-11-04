@@ -192,8 +192,8 @@ if __name__ == '__main__':
       if value.requires_grad:
         params += [{'params':[value],'lr':args.lr, 'weight_decay': 4e-5}]
 
-    criterion = torch.nn.BCEWithLogitsLoss(reduce=False) if args.n_classes == 2 else \
-      torch.nn.CrossEntropyLoss(reduce=False)
+    criterion = torch.nn.BCEWithLogitsLoss(reduction="none") if args.n_classes == 2 else \
+      torch.nn.CrossEntropyLoss(reduction="none")
     print("Using {} criterion", criterion)
     # iters_per_epoch = len(Trainloader)
     # model.eval()
