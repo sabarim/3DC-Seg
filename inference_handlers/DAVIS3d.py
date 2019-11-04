@@ -8,8 +8,8 @@ from PIL import Image
 from scipy.misc import imresize
 from torch.nn import functional as F
 
-from inference_handlers.DAVIS import palette
 from network.NetworkUtil import run_forward
+from scripts.path_constants import DAVIS_ROOT
 from utils.AverageMeter import AverageMeter
 from utils.util import iou_fixed
 
@@ -22,6 +22,7 @@ def infer_DAVIS3d(dataloader, model, criterion, writer, args):
   # switch to evaluate mode
   model.eval()
   end = time.time()
+  palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
   for seq in dataloader.dataset.get_video_ids():
   # for seq in ['horsejump-high']:
     dataloader.dataset.set_video_id(seq)
@@ -59,7 +60,7 @@ def infer_DAVIS3d(dataloader, model, criterion, writer, args):
     ious.update(iou, 1)
 
     results_extra = torch.stack([torch.stack(val).mean(dim=0) for key, val in all_e.items()])
-    save_results(results, results_extra.permute(1,0,2,3), info, os.path.join('results', args.network_name))
+    save_results(results, results_extra.permute(1,0,2,3), info, os.path.join('results', args.network_name), palette)
 
   print('Finished Inference Loss {losses.avg:.5f} IOU {iou.avg: 5f}'
         .format(losses=losses, iou=ious))
@@ -91,7 +92,7 @@ def forward(criterion, input_dict, ious, model):
   return input, input_var, loss, F.softmax(pred, dim=1), pred_extra
 
 
-def save_results(pred, pred_extra, info, results_path):
+def save_results(pred, pred_extra, info, results_path, palette):
   results_path = os.path.join(results_path, info['name'][0])
   pred = pred.data.cpu().numpy()
   # make hard label
