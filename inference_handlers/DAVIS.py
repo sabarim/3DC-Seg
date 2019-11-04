@@ -12,9 +12,9 @@ from loss.Loss import bootstrapped_ce_loss
 from network.NetworkUtil import run_forward
 from util import create_object_id_mapping, get_one_hot_vectors
 from utils.AverageMeter import AverageMeter
-from utils.Constants import DAVIS_ROOT
 from utils.util import iou_fixed, get_iou
 
+palette = Image.fromarray(np.zeros((480,854))).getpalette()
 IOU_THRESH = 0.1
 
 
@@ -28,7 +28,6 @@ def infer_DAVIS(dataloader, model, criterion, writer, args):
 
   end = time.time()
   iter = 0
-  palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
   for seq in dataloader.dataset.get_video_ids():
   # for seq in ['goat']:
     dataloader.dataset.set_video_id(seq)
@@ -63,7 +62,7 @@ def infer_DAVIS(dataloader, model, criterion, writer, args):
         if args.save_results:
           pred = torch.cat(((torch.sum(output, dim=0) == 0).unsqueeze(0).float(),
                                 output))
-          save_results(pred, info, i, results_path, palette=palette)
+          save_results(pred, info, i, results_path)
 
         # for key in object_mapping.keys():
         #   val = object_mapping[key]
@@ -157,7 +156,7 @@ def remove_padding(tensor, info):
   return E
 
 
-def save_results(pred, info, f, results_path, palette):
+def save_results(pred, info, f, results_path):
   results_path = os.path.join(results_path, info['name'][0])
   E = pred.data.cpu().numpy()
   # make hard label
