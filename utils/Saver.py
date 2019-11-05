@@ -7,7 +7,7 @@ from utils.Constants import font
 from utils.util import ToLabel
 
 
-def load_weights(model, optimizer, args, model_dir, scheduler):
+def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
     start_epoch = 0
     best_iou_train = 0
     best_iou_eval = 0
@@ -50,7 +50,8 @@ def load_weights(model, optimizer, args, model_dir, scheduler):
       missing_keys = np.setdiff1d(list(state.keys()),list(checkpoint_valid.keys()))
       
       if len(missing_keys) > 0:
-        print("WARN: {} keys are found missing in the loaded model weights.".format(missing_keys))
+        print("WARN: {} / {}keys are found missing in the loaded model weights.".format(len(missing_keys),
+                                                                                        len(checkpoint['model'].keys())))
       for key in missing_keys:
         checkpoint_valid[key] = state[key]
 
@@ -61,6 +62,8 @@ def load_weights(model, optimizer, args, model_dir, scheduler):
           lr = optimizer.param_groups[0]['lr']
         if 'scheduler' in checkpoint.keys() and checkpoint['scheduler'] is not None and scheduler is not None:
           scheduler.load_state_dict(checkpoint['scheduler'].state_dict())
+        if 'amp' in checkpoint.keys() and checkpoint['amp'] is not None and amp is not None:
+          amp.load_state_dict(checkpoint['amp'])
         if 'best_iou' in checkpoint.keys() and checkpoint['task'] == 'train':
           best_iou_train = checkpoint['best_iou']
           best_loss_train = checkpoint['loss']
@@ -100,14 +103,15 @@ def save_results(all_E, info, num_frames, path, palette):
     img_E.save(os.path.join(path, '{:05d}.png'.format(f)))
 
 
-def save_checkpoint(epoch, iou_mean, loss_mean, model, optimiser, save_name, is_train, scheduler):
+def save_checkpoint(epoch, iou_mean, loss_mean, model, optimiser, save_name, is_train, scheduler, amp = None):
   torch.save({'epoch': epoch,
               'model': model.state_dict(),
               'optimizer': optimiser.state_dict(),
               'best_iou': iou_mean,
               'loss': loss_mean,
               'task': 'train' if is_train else 'eval',
-              'scheduler': scheduler
+              'scheduler': scheduler,
+              'amp': amp.state_dict()
               },
              save_name)
   print("Saving epoch {} with IOU {}".format(epoch, iou_mean))

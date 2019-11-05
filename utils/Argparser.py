@@ -157,5 +157,11 @@ def parse_args():
                       help='config file path for loss parameters', default="run_configs/param_configs/embedding_config",
                       type=str)
 
+  # mixed precision training
+  parser.add_argument('--mixed_precision', dest='mixed_precision',
+                      help='True for mixed precision training',
+                      default=False, type=bool)
+
+
   args = parser.parse_args()
   return args

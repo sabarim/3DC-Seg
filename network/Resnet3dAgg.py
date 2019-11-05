@@ -10,12 +10,12 @@ from network.models import BaseNetwork
 
 
 class Encoder3d(Encoder):
-  def __init__(self, tw = 16, sample_size = 112):
+  def __init__(self, tw = 16, sample_size = 112, resnet = None):
     super(Encoder3d, self).__init__()
     self.conv1_p = nn.Conv3d(1, 64, kernel_size=7, stride=(1, 2, 2),
                              padding=(3, 3, 3), bias=False)
 
-    resnet = resnet50(sample_size = sample_size, sample_duration = tw)
+    resnet = resnet50(sample_size = sample_size, sample_duration = tw) if resnet is None else resnet
     self.resnet = resnet
     self.conv1 = resnet.conv1
     self.bn1 = resnet.bn1
@@ -45,15 +45,15 @@ class Encoder3d(Encoder):
     f /= 255.0
 
     if in_f is None:
-      p = in_p.float()
+      p = in_p
       if len(in_p.shape) < 4:
-        p = torch.unsqueeze(in_p, dim=1).float()  # add channel dim
+        p = torch.unsqueeze(in_p, dim=1)  # add channel dim
 
       x = self.conv1_p(p)
     elif in_p is not None:
-      p = in_p.float()
+      p = in_p
       if len(in_p.shape) < 4:
-        p = torch.unsqueeze(in_p, dim=1).float()  # add channel dim
+        p = torch.unsqueeze(in_p, dim=1)  # add channel dim
 
       x = self.conv1(f) + self.conv1_p(p)  # + self.conv1_n(n)
     else:

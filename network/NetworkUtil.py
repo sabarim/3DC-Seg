@@ -44,9 +44,9 @@ def propagate3d(model, inputs, ref_mask, proposals):
 
 
 def run_forward(model, inputs, ref_masks, proposals):
-  if 'multi' in str(model.module.__class__).lower():
-    return propagateMultiEncoder(model, inputs, ref_masks, proposals)
-  elif 'resnet3d' in str(model.module.__class__).lower():
+  if 'resnet3d' in str(model.module.__class__).lower():
     return propagate3d(model, inputs, ref_masks, proposals)
+  elif 'multi' in str(model.module.__class__).lower():
+    return propagateMultiEncoder(model, inputs, ref_masks, proposals)
   else:
     return propagate(model, inputs, ref_masks)
