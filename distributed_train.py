@@ -28,7 +28,6 @@ MASK_CHANGE_THRESHOLD = 1000
 BBOX_CROP = True
 BEST_IOU=0
 
-palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
 
 
 def train(train_loader, model, criterion, optimizer, epoch, foo):
