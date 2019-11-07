@@ -27,7 +27,7 @@ MASK_CHANGE_THRESHOLD = 1000
 
 BBOX_CROP = True
 BEST_IOU=0
-
+torch.backends.cudnn.benchmark=True
 
 
 def train(train_loader, model, criterion, optimizer, epoch, foo):
@@ -154,6 +154,9 @@ if __name__ == '__main__':
     #shuffle = True if args.data_sample is None else False
     model = get_model(args, network_models)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval = \
+      load_weights(model, optimizer, args, MODEL_DIR, scheduler=None, amp=amp)  # params
+    lr_schedulers = get_lr_schedulers(optimizer, args, start_epoch)
 
     # model = FeatureAgg3dMergeTemporal()
     print("Using model: {}".format(model.__class__), flush=True)
@@ -165,7 +168,7 @@ if __name__ == '__main__':
       model.cuda()
       # model = apex.parallel.convert_syncbn_model(model)
       opt_level = "O1" if args.mixed_precision else "O0"
-      print("opt_leven is {}".format(opt_level))
+      print("opt_level is {}".format(opt_level))
       model, optimizer = amp.initialize(model, optimizer, opt_level=opt_level)
       model = apex.parallel.DistributedDataParallel(model, delay_allreduce=True)
 
@@ -181,9 +184,6 @@ if __name__ == '__main__':
 
     print(summary(model, tuple((256,256)), batch_size=1))
     writer = SummaryWriter(log_dir="runs/" + args.network_name)
-    model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval = \
-      load_weights(model, optimizer, args, MODEL_DIR, scheduler=None,amp=amp)# params
-    lr_schedulers = get_lr_schedulers(optimizer, args, start_epoch)
 
     params = []
     for key, value in dict(model.named_parameters()).items():

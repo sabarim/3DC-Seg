@@ -25,8 +25,8 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
         load_name = {1: 'saved_models/youtubevos_pretrain.pth', 2: 'saved_models/rgmp.pth'}
         checkpoint2d = torch.load(load_name2d)
         checkpoint = load_pretrained_weights(load_name3d)
-        encoder2d_dict = OrderedDict([(k.lower().replace('module.encoder', 'module.encoder2d'), v)
-                                            for k, v in checkpoint2d.items() if "module.encoder" in k.lower()])
+        encoder2d_dict = OrderedDict([(k.lower().replace('module.encoder', 'encoder2d'), v)
+                                            for k, v in checkpoint2d.items() if "encoder" in k.lower()])
         #FIXME: uncomment for using rgmp pretrained weights
         #checkpoint['model'].update(encoder2d_dict)
         # checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
@@ -35,7 +35,7 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
         load_name = 'saved_models/resnet-50-kinetics.pth'
         checkpoint = torch.load(load_name)
         # checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
-        checkpoint = {"model": OrderedDict([(k.lower().replace('module.', 'module.encoder.'), v)
+        checkpoint = {"model": OrderedDict([(k.lower().replace('module.', 'encoder.'), v)
                                             for k, v in checkpoint['state_dict'].items()]), 'epoch': 0}
       elif 'pretrain' in loadepoch:
         load_name = os.path.join('saved_models', loadepoch + '.pth')
@@ -46,12 +46,14 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
         checkpoint = torch.load(load_name)
         start_epoch = checkpoint['epoch'] + 1 if args.task == "train" else 0
         # checkpoint["model"] = OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint["model"].items()])
+      # remove module. prefix
+      checkpoint['model'] = {k.replace('module.', ''):v for k, v in checkpoint['model'].items()}
       checkpoint_valid = {k: v for k, v in checkpoint['model'].items() if k in state and state[k].shape == v.shape}
       missing_keys = np.setdiff1d(list(state.keys()),list(checkpoint_valid.keys()))
       
       if len(missing_keys) > 0:
         print("WARN: {} / {}keys are found missing in the loaded model weights.".format(len(missing_keys),
-                                                                                        len(checkpoint['model'].keys())))
+                                                                                        len(state.keys())))
       for key in missing_keys:
         checkpoint_valid[key] = state[key]
 
