@@ -6,8 +6,8 @@ import torch
 from PIL import Image
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler
-
 from torchsummary import summary
+
 from Forward import forward
 from inference_handlers.inference import infer
 from network.RGMP import Encoder
@@ -44,19 +44,23 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
 
   end = time.time()
   for i, input_dict in enumerate(train_loader):
-    input, input_var, iou, loss, loss_image, masks_guidance, output, target, loss_extra = forward(args, criterion, input_dict, ious,
+    iou, loss, loss_image, output, loss_extra = forward(args, criterion, input_dict, ious,
                                                                                       model, ious_extra=ious_extra)
-    losses.update(loss.item(), input.size(0))
-    losses_extra.update(loss_extra.item(), 1)
+    losses.update(loss.cpu().item(), 1)
+    losses_extra.update(loss_extra.cpu().item(), 1)
     foo.add_scalar("data/loss", loss, count)
     foo.add_scalar("data/iou", iou, count)
     if args.show_image_summary:
       if "proposals" in input_dict:
         foo.add_images("data/proposals", input_dict['proposals'][:, :, -1].repeat(1, 3, 1, 1), count)
-      show_image_summary(count, foo, input_var[0:1], masks_guidance, target[0:1], output[0:1])
+      masks_guidance = input_dict['masks_guidance'] if 'masks_guidance' in input_dict else None
+      show_image_summary(count, foo, input_dict['images'][0:1].float(), masks_guidance,
+                         input_dict['target'][0:1], output[0:1])
 
     # compute gradient and do SGD step
     optimizer.zero_grad()
+    # with amp.scale_loss(loss, optimizer) as scaled_loss:
+    #   scaled_loss.backward()
     loss.backward()
     optimizer.step()
 
@@ -97,8 +101,8 @@ def validate(val_loader, model, criterion, epoch, foo):
     for i, input_dict in enumerate(val_loader):
       with torch.no_grad():
         # compute output
-        input, input_var, iou, loss, loss_image, masks_guidance, output, target, loss_extra = forward(args, criterion, input_dict, ious,
-                                                                                                      model, ious_extra=ious_extra)
+        iou, loss, loss_image, output, loss_extra = forward(args, criterion, input_dict, ious,
+                                                            model, ious_extra=ious_extra)
         ious_video.update(np.mean(iou))
         losses.update(loss.item(), input.size(0))
         losses_extra.update(loss_extra.item(), 1)
@@ -107,7 +111,9 @@ def validate(val_loader, model, criterion, epoch, foo):
         end = time.time()
 
         if args.show_image_summary:
-          show_image_summary(count, foo, input_var, masks_guidance, target, output)
+          masks_guidance = input_dict['masks_guidance'] if 'masks_guidance' in input_dict else None
+          show_image_summary(count, foo, input_dict['images'], masks_guidance, input_dict['target'],
+                             output)
 
         print('Test: [{0}][{1}/{2}]\t'
               'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
@@ -142,6 +148,10 @@ if __name__ == '__main__':
     trainloader = DataLoader(trainset, batch_size=args.bs, num_workers=args.num_workers, shuffle=shuffle, sampler=sampler)
     testloader = DataLoader(testset, batch_size=1, num_workers=1, shuffle=False)
     model = get_model(args, network_models)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval = \
+      load_weights(model, optimizer, args, MODEL_DIR, scheduler=None)  # params
+    lr_schedulers = get_lr_schedulers(optimizer, args, 0)
 
     # model = FeatureAgg3dMergeTemporal()
     print("Using model: {}".format(model.__class__), flush=True)
@@ -154,14 +164,16 @@ if __name__ == '__main__':
       print("devices available: {}".format(torch.cuda.device_count()))
       model = torch.nn.DataParallel(model)
       model.cuda()
+      # init_torch_distributed()
+      # opt_level = "O1" if args.mixed_precision else "O0"
+      # print("opt_level is {}".format(opt_level))
+      # model = apex.parallel.convert_syncbn_model(model)
+      # model, optimizer = amp.initialize(model, optimizer, opt_level=opt_level)
+      # model = apex.parallel.DistributedDataParallel(model, delay_allreduce=True)
 
     # model.cuda()
     print(summary(model, tuple((256,256)), batch_size=1))
     writer = SummaryWriter(log_dir="runs/" + args.network_name)
-    optimizer = torch.optim.Adam(model.module.parameters(), lr=args.lr)
-    model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval = \
-      load_weights(model, optimizer, args, MODEL_DIR, scheduler=None)# params
-    lr_schedulers = get_lr_schedulers(optimizer, args, start_epoch)
 
     params = []
     for key, value in dict(model.named_parameters()).items():
@@ -181,7 +193,7 @@ if __name__ == '__main__':
         encoders = [module for module in model.modules() if isinstance(module, Encoder)]
         for encoder in encoders:
           encoder.freeze_batchnorm()
-      for epoch in range(start_epoch, args.num_epochs):
+      for epoch in range(0, args.num_epochs):
         loss_mean, iou_mean  = train(trainloader, model, criterion, optimizer, epoch, writer)
         for lr_scheduler in lr_schedulers:
           lr_scheduler.step(epoch)
