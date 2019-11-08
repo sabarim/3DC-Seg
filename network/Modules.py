@@ -50,6 +50,39 @@ class Refine3d(nn.Module):
     return m
 
 
+class Refine3dDG(nn.Module):
+  def __init__(self, inplanes, planes, scale_factor=2):
+    super(Refine3dDG, self).__init__()
+    self.convFS1 = nn.Sequential(
+      nn.Conv3d(inplanes, planes, kernel_size=1),
+      nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
+    self.convFS2 = nn.Sequential(
+      # nn.Conv3d(planes, planes, kernel_size=1),
+      nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
+    self.convFS3 = nn.Sequential(
+      # nn.Conv3d(planes, planes, kernel_size=1),
+      nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
+    self.convMM1 = nn.Sequential(
+      # nn.Conv3d(planes, planes, kernel_size=1),
+      nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
+    self.convMM2 = nn.Sequential(
+      # nn.Conv3d(planes, planes, kernel_size=1),
+      nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
+    self.scale_factor = scale_factor
+
+  def forward(self, f, pm):
+    s = self.convFS1(f)
+    sr = self.convFS2(F.relu(s))
+    sr = self.convFS3(F.relu(sr))
+    s = s + sr
+
+    m = s + F.upsample(pm, size=s.shape[-3:], mode='trilinear')
+
+    mr = self.convMM1(F.relu(m))
+    mr = self.convMM2(F.relu(mr))
+    m = m + mr
+    return m
+
 class GC(nn.Module):
   def __init__(self, inplanes, planes, kh=7, kw=7):
     super(GC, self).__init__()

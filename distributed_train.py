@@ -1,9 +1,11 @@
 import os
 import time
 
+import apex
 import numpy as np
 import torch
 from PIL import Image
+from apex import amp
 from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler
 from torchsummary import summary
@@ -25,8 +27,7 @@ MASK_CHANGE_THRESHOLD = 1000
 
 BBOX_CROP = True
 BEST_IOU=0
-
-palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
+torch.backends.cudnn.benchmark=True
 
 
 def train(train_loader, model, criterion, optimizer, epoch, foo):
@@ -43,22 +44,27 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
 
   end = time.time()
   for i, input_dict in enumerate(train_loader):
-    input, input_var, iou, loss, loss_image, masks_guidance, output, target, loss_extra = \
+    iou, loss, loss_image, output, loss_extra = \
       forward(args, criterion, input_dict, ious, model, ious_extra=ious_extra)
-    losses.update(loss.item(), input.size(0))
+    losses.update(loss.item(), 1)
     losses_extra.update(loss_extra.item(), 1)
     foo.add_scalar("data/loss", loss, count)
     foo.add_scalar("data/iou", iou, count)
     if args.show_image_summary:
       if "proposals" in input_dict:
         foo.add_images("data/proposals", input_dict['proposals'][:, :, -1].repeat(1, 3, 1, 1), count)
-      show_image_summary(count, foo, input_var[0:1], masks_guidance, target[0:1], output[0:1])
+      masks_guidance = input_dict['masks_guidance'] if 'masks_guidance' in input_dict else None
+      show_image_summary(count, foo, input_dict['images'][0:1].float(), masks_guidance,
+                         input_dict['target'][0:1], output[0:1])
 
     # compute gradient and do SGD step
     optimizer.zero_grad()
-    loss.backward()
+    with amp.scale_loss(loss, optimizer) as scaled_loss:
+      scaled_loss.backward()
+    # loss.backward()
     optimizer.step()
 
+    torch.cuda.synchronize()
     # measure elapsed time
     batch_time.update(time.time() - end)
     end = time.time()
@@ -99,17 +105,19 @@ def validate(dataset, model, criterion, epoch, foo):
     for i, input_dict in enumerate(testloader):
       with torch.no_grad():
         # compute output
-        input, input_var, iou, loss, loss_image, masks_guidance, output, target, loss_extra = forward(args, criterion, input_dict, ious,
-                                                                                                      model, ious_extra=ious_extra)
-        ious_video.update(np.mean(iou))
-        losses.update(loss.item(), input.size(0))
+        iou, loss, loss_image, output, loss_extra = forward(args, criterion, input_dict, ious,
+                                                            model, ious_extra=ious_extra)
+        ious_video.update(iou)
+        losses.update(loss.item(), 1)
         losses_extra.update(loss_extra.item(), 1)
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
 
         if args.show_image_summary:
-          show_image_summary(count, foo, input_var, masks_guidance, target, output)
+          masks_guidance = input_dict['masks_guidance'] if 'masks_guidance' in input_dict else None
+          show_image_summary(count, foo, input_dict['images'], masks_guidance, input_dict['target'],
+                             output)
 
         print('Test: [{0}][{1}/{2}]\t'
               'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
@@ -145,6 +153,10 @@ if __name__ == '__main__':
     #  torch.utils.data.distributed.DistributedSampler(trainset, shuffle=True)
     #shuffle = True if args.data_sample is None else False
     model = get_model(args, network_models)
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval = \
+      load_weights(model, optimizer, args, MODEL_DIR, scheduler=None, amp=amp)  # params
+    lr_schedulers = get_lr_schedulers(optimizer, args, start_epoch)
 
     # model = FeatureAgg3dMergeTemporal()
     print("Using model: {}".format(model.__class__), flush=True)
@@ -154,9 +166,14 @@ if __name__ == '__main__':
       init_torch_distributed()
       # model = torch.nn.DataParallel(model)
       model.cuda()
+      # model = apex.parallel.convert_syncbn_model(model)
+      opt_level = "O1" if args.mixed_precision else "O0"
+      print("opt_level is {}".format(opt_level))
+      model, optimizer = amp.initialize(model, optimizer, opt_level=opt_level)
+      model = apex.parallel.DistributedDataParallel(model, delay_allreduce=True)
 
     # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    model = torch.nn.parallel.DistributedDataParallel(model,find_unused_parameters=True)
+    # model = torch.nn.parallel.DistributedDataParallel(model,find_unused_parameters=True)
     train_sampler = RandomSampler(trainset, replacement=True, num_samples=args.data_sample) \
       if args.data_sample is not None else \
       torch.utils.data.distributed.DistributedSampler(trainset, shuffle=True)
@@ -167,10 +184,6 @@ if __name__ == '__main__':
 
     print(summary(model, tuple((256,256)), batch_size=1))
     writer = SummaryWriter(log_dir="runs/" + args.network_name)
-    optimizer = torch.optim.Adam(model.module.parameters(), lr=args.lr)
-    model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval = \
-      load_weights(model, optimizer, args, MODEL_DIR, scheduler=None)# params
-    lr_schedulers = get_lr_schedulers(optimizer, args, start_epoch)
 
     params = []
     for key, value in dict(model.named_parameters()).items():
@@ -201,7 +214,7 @@ if __name__ == '__main__':
           best_loss_train = loss_mean if loss_mean < best_loss_train else best_loss_train
           save_name = '{}/{}.pth'.format(MODEL_DIR, "model_best_train")
           save_checkpoint(epoch, iou_mean, loss_mean, model, optimizer, save_name, is_train=True,
-                          scheduler=None)
+                          scheduler=None, amp=amp)
 
         if (epoch + 1) % args.eval_epoch == 0:
           loss_mean, iou_mean = validate(testset, model, criterion, epoch, writer)

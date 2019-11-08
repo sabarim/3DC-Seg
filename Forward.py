@@ -25,4 +25,4 @@ def forward(args, criterion, input_dict, ious, model, **kwargs):
   pred = F.softmax(pred, dim=1)
   iou = iou_fixed(pred.data.cpu().numpy(), target.data.cpu().numpy())
   ious.update(np.mean(iou))
-  return input, input_var, iou, loss, loss_image, masks_guidance, pred, target, loss_extra
+  return iou, loss, loss_image.data.cpu(), pred.data.cpu(), loss_extra
