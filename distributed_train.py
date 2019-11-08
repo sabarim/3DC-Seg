@@ -103,9 +103,10 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
         batch_time=batch_time, loss=losses, iou=ious,
         loss_extra=losses_extra, iou_extra=ious_extra), flush=True)
 
-  print('Finished Train Epoch {} Loss {losses.avg:.5f} Loss Extra {losses_extra.avg: .5f} IOU {iou.avg: .2f} '
-        'IOU Extra {iou_extra.avg: .2f}'.
-        format(epoch, losses=losses, losses_extra=losses_extra, iou=ious, iou_extra=ious_extra), flush=True)
+  if args.local_rank == 0:
+    print('Finished Train Epoch {} Loss {losses.avg:.5f} Loss Extra {losses_extra.avg: .5f} IOU {iou.avg: .2f} '
+          'IOU Extra {iou_extra.avg: .2f}'.
+          format(epoch, losses=losses, losses_extra=losses_extra, iou=ious, iou_extra=ious_extra), flush=True)
   return losses.avg, ious.avg
 
 
@@ -177,16 +178,18 @@ def validate(dataset, model, criterion, epoch, foo):
             batch_time=batch_time, loss=losses, iou=ious_video,
             loss_extra=losses_extra, iou_extra=ious_extra),
             flush=True)
-    print('Sequence {0}\t IOU {iou.avg} IOU Extra {iou_extra.avg}'.format(input_dict['info']['name'], iou=ious_video,
+    if args.local_rank == 0:
+      print('Sequence {0}\t IOU {iou.avg} IOU Extra {iou_extra.avg}'.format(input_dict['info']['name'], iou=ious_video,
                                                                           iou_extra = ious_video_extra), flush=True)
     ious.update(ious_video.avg)
     ious_extra.update(ious_video_extra)
 
     foo.add_scalar("data/losses-test", losses.avg, epoch)
 
-  print('Finished Eval Epoch {} Loss {losses.avg:.5f} Losses Extra {losses_extra.avg} IOU {iou.avg: .2f} '
-        'IOU Extra {iou_extra.avg: .2f}'
-        .format(epoch, losses=losses, losses_extra=losses_extra, iou=ious, iou_extra = ious_extra), flush=True)
+  if args.local_rank == 0:
+    print('Finished Eval Epoch {} Loss {losses.avg:.5f} Losses Extra {losses_extra.avg} IOU {iou.avg: .2f} '
+          'IOU Extra {iou_extra.avg: .2f}'
+          .format(epoch, losses=losses, losses_extra=losses_extra, iou=ious, iou_extra = ious_extra), flush=True)
 
   return losses.avg, ious.avg
 
