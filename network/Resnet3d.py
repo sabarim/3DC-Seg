@@ -100,14 +100,14 @@ class Bottleneck(nn.Module):
 class Bottleneck_depthwise_ip(Bottleneck):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
-        super(Bottleneck_depthwise_ip, self).__init__(inplanes, planes, stride, downsample)
+    def __init__(self, inplanes, planes, stride=1, downsample=None, dilation=1):
+        super(Bottleneck_depthwise_ip, self).__init__(inplanes, planes, stride, downsample, dilation)
         self.conv1 = nn.Conv3d(inplanes, planes, kernel_size=1, bias=False)
         self.bn1 = nn.BatchNorm3d(planes)
         self.conv2 = nn.Conv3d(planes, planes, kernel_size=1, bias=False)
         self.bn2 = nn.BatchNorm3d(planes)
         self.conv3 = nn.Conv3d(planes, planes, kernel_size=3, stride=stride,
-                               padding=1, bias=False, groups = planes)
+                               padding=dilation, dilation=dilation, bias=False, groups = planes)
         self.bn3 = nn.BatchNorm3d(planes)
         self.conv4 = nn.Conv3d(planes, planes * 4, kernel_size=1, bias=False)
         self.bn4 = nn.BatchNorm3d(planes * 4)

@@ -40,7 +40,7 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
     input, input_var, iou, loss, loss_image, masks_guidance, output, target, loss_extra = forward(args, criterion, input_dict, ious,
                                                                                       model, ious_extra=ious_extra)
     losses.update(loss.item(), input.size(0))
-    losses_extra.update(loss_extra.item(), 1)
+    losses_extra.update(loss_extra, 1)
     foo.add_scalar("data/loss", loss, count)
     foo.add_scalar("data/iou", iou, count)
     if args.show_image_summary:
@@ -149,7 +149,7 @@ if __name__ == '__main__':
       model.cuda()
 
     # model.cuda()
-    print(summary(model, tuple((256,256)), batch_size=1))
+    #print(summary(model, tuple((256,256)), batch_size=1))
     writer = SummaryWriter(log_dir="runs/" + args.network_name)
     optimizer = torch.optim.Adam(model.module.parameters(), lr=args.lr)
     model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval = \
