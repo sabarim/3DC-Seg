@@ -103,8 +103,9 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
         batch_time=batch_time, loss=losses, iou=ious,
         loss_extra=losses_extra, iou_extra=ious_extra), flush=True)
 
-  print('Finished Train Epoch {} Loss {losses.avg:.5f} Loss Extra {losses_extra.avg: .5f} IOU {iou.avg: .5f}'.
-        format(epoch, losses=losses, losses_extra=losses_extra, iou=ious), flush=True)
+  print('Finished Train Epoch {} Loss {losses.avg:.5f} Loss Extra {losses_extra.avg: .5f} IOU {iou.avg: .2f} '
+        'IOU Extra {iou_extra.avg: .2f}'.
+        format(epoch, losses=losses, losses_extra=losses_extra, iou=ious, iou_extra=ious_extra), flush=True)
   return losses.avg, ious.avg
 
 
@@ -128,11 +129,12 @@ def validate(dataset, model, criterion, epoch, foo):
                                                                    rank=local_rank, shuffle=False)
     testloader = DataLoader(dataset, batch_size=1, num_workers=1, shuffle=False, sampler=test_sampler)
     ious_video = AverageMeter()
+    ious_video_extra = AverageMeter()
     for i, input_dict in enumerate(testloader):
       with torch.no_grad():
         # compute output
         iou, loss, loss_image, output, loss_extra = forward(args, criterion, input_dict,
-                                                            model, ious_extra=ious_extra)
+                                                            model, ious_extra=ious_video_extra)
         count = count + 1
 
         # Average loss and accuracy across processes for logging
@@ -175,13 +177,16 @@ def validate(dataset, model, criterion, epoch, foo):
             batch_time=batch_time, loss=losses, iou=ious_video,
             loss_extra=losses_extra, iou_extra=ious_extra),
             flush=True)
-    print('Sequence {0}\t IOU {iou.avg}'.format(input_dict['info']['name'], iou=ious_video), flush=True)
+    print('Sequence {0}\t IOU {iou.avg} IOU Extra {iou_extra.avg}'.format(input_dict['info']['name'], iou=ious_video,
+                                                                          iou_extra = ious_video_extra), flush=True)
     ious.update(ious_video.avg)
+    ious_extra.update(ious_video_extra)
 
     foo.add_scalar("data/losses-test", losses.avg, epoch)
 
-  print('Finished Eval Epoch {} Loss {losses.avg:.5f} Losses Extra {losses_extra.avg} IOU {iou.avg: 5f}'
-        .format(epoch, losses=losses, losses_extra=losses_extra, iou=ious), flush=True)
+  print('Finished Eval Epoch {} Loss {losses.avg:.5f} Losses Extra {losses_extra.avg} IOU {iou.avg: .2f} '
+        'IOU Extra {iou_extra.avg: .2f}'
+        .format(epoch, losses=losses, losses_extra=losses_extra, iou=ious, iou_extra = ious_extra), flush=True)
 
   return losses.avg, ious.avg
 
