@@ -164,6 +164,8 @@ def random_object_crop_tensors(tensors, crop_size):
   for key in tensors.keys():
     tensors_cropped[key] = tensors[key][top: top + new_h,
                            left: left + new_w]
+    if tensors_cropped[key].shape != crop_size:
+      tensors_cropped[key] = resize_fixed_size({key:tensors_cropped[key]}, crop_size)[key]
   return tensors_cropped
 
 

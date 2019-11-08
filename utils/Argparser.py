@@ -161,7 +161,9 @@ def parse_args():
   parser.add_argument('--mixed_precision', dest='mixed_precision',
                       help='True for mixed precision training',
                       default=False, type=bool)
-
+  parser.add_argument('--print_freq', dest='print_freq',
+                      help='Frequency of statistics printing',
+                      default=1, type=int)
 
   args = parser.parse_args()
   return args

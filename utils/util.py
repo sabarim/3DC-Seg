@@ -1,13 +1,11 @@
 import inspect
 
-import torch
 import numpy as np
+import torch
+from apex.parallel import ReduceOp
+from torch.distributed import all_reduce
 
 from network.models import BaseNetwork
-from network.FeatureAgg3d import FeatureAgg3d, FeatureAgg3dMergeTemporal
-from network.Resnet3dAgg import Resnet3d
-from network.EmbeddingNetwork import Resnet3dEmbeddingNetwork
-
 
 
 def ToOneHot(labels, num_objects):
@@ -48,6 +46,25 @@ def iou_fixed(pred, gt, exclude_last=False):
       iou = i / u
     ious.append(iou)
   miou = np.mean(ious)
+  return miou
+
+
+def iou_fixed_torch(pred, gt, exclude_last=False):
+  pred = torch.argmax(pred, dim=1).int()
+  ious = []
+  num_frames = pred.shape[0]
+  end = num_frames
+  if exclude_last:
+    end -= 1
+  for t in range(0, end):
+    i = ((pred[t] > 0) * (gt[t] > 0)).sum()
+    u = ((pred[t] + gt[t]) > 0).sum()
+    if u == 0:
+      iou = 1.0
+    else:
+      iou = i.float() / u.float()
+    ious.append(iou)
+  miou = torch.stack(ious).mean()
   return miou
 
 
@@ -106,3 +123,18 @@ def init_torch_distributed():
     'nccl',
     init_method='env://',
   )
+
+
+def cleanup_env():
+  """
+  Destroy the default process group.
+
+  :return:
+  """
+  torch.distributed.destroy_process_group()
+
+def reduce_tensor(tensor, args):
+  rt = tensor.clone()
+  all_reduce(rt, op=ReduceOp.SUM)
+  rt /= args.world_size
+  return rt

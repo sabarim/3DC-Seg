@@ -3,10 +3,10 @@ from torch.nn import functional as F
 
 from loss.Loss import compute_loss
 from network.NetworkUtil import run_forward
-from utils.util import iou_fixed
+from utils.util import iou_fixed, iou_fixed_torch
 
 
-def forward(args, criterion, input_dict, ious, model, **kwargs):
+def forward(args, criterion, input_dict, model, **kwargs):
   input = input_dict["images"]
   target = input_dict["target"]
   target_extra = None if 'target_extra' not in input_dict else input_dict['target_extra']
@@ -23,6 +23,5 @@ def forward(args, criterion, input_dict, ious, model, **kwargs):
   ious_extra = kwargs['ious_extra'] if 'ious_extra' in kwargs else None
   loss, loss_image, pred, loss_extra = compute_loss(args, criterion, pred, target, target_extra, iou_meter=ious_extra)
   pred = F.softmax(pred, dim=1)
-  iou = iou_fixed(pred.data.cpu().numpy(), target.data.cpu().numpy())
-  ious.update(np.mean(iou))
-  return iou, loss, loss_image.data.cpu(), pred.data.cpu(), loss_extra
+  iou = iou_fixed_torch(pred, target.float().cuda())
+  return iou, loss, loss_image, pred, loss_extra
