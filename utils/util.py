@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from apex.parallel import ReduceOp
 from torch.distributed import all_reduce
-
+from network.EmbeddingNetwork import Resnet3dSpatialEmbedding
 from network.models import BaseNetwork
 
 
@@ -57,14 +57,14 @@ def iou_fixed_torch(pred, gt, exclude_last=False):
   if exclude_last:
     end -= 1
   for t in range(0, end):
-    i = ((pred[t] > 0) * (gt[t] > 0)).sum()
-    u = ((pred[t] + gt[t]) > 0).sum()
+    i = ((pred[t] > 0) * (gt[t] > 0)).float().sum()
+    u = ((pred[t] + gt[t]) > 0).float().sum()
     if u == 0:
-      iou = 1.0
+      iou = torch.cuda.FloatTensor([1.0]).sum()
     else:
       iou = i.float() / u.float()
-    ious.append(iou)
-  miou = torch.stack(ious).mean()
+    ious.append(iou.float())
+  miou = torch.stack(ious).float().mean()
   return miou
 
 
