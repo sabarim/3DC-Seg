@@ -43,8 +43,11 @@ class DAVIS(data.Dataset):
     self.create_img_list(_imset_f)
     # max width of a video which can be used for padding during training
     self.max_w = max([w for (h, w) in self.shape.values()])
+    self.min_w = min([w for (h, w) in self.shape.values()])
     self.max_h = max([h for (h, w) in self.shape.values()])
-    print("Max image width {} : Max image height {}".format(self.max_w, self.max_h))
+    self.min_h = min([h for (h, w) in self.shape.values()])
+    print("Max image width {} : Max image height {}\n"
+          "Min image width: {} MIN Image height: {}".format(self.max_w, self.max_h, self.min_w, self.min_h))
     self.occluders = load_occluders(PASCAL_VOC_PATH)
 
   def set_paths(self, imset, resolution, root):

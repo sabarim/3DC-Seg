@@ -2,7 +2,7 @@ import torch
 from torch import nn
 
 from network.Modules import Refine3dDG
-from network.Resnet3d import resnet50_no_ts
+from network.Resnet3d import resnet50
 from network.Resnet3dAgg import Encoder3d, Decoder3d, Resnet3dSimilarity
 from network.embedding_head import NonlocalOffsetEmbeddingHead
 from network.models import BaseNetwork
@@ -101,7 +101,7 @@ class Resnet3dSpatialEmbedding(Resnet3dSimilarity):
 class Resnet3dEmbeddingMultiDecoder(Resnet3dSimilarity):
   def __init__(self, tw=8, sample_size=112,n_classes=2, e_dim=64):
     super(Resnet3dEmbeddingMultiDecoder, self).__init__(n_classes=n_classes)
-    resnet = resnet50_no_ts(sample_size=sample_size, sample_duration=tw)
+    resnet = resnet50(sample_size=sample_size, sample_duration=tw)
     self.encoder = Encoder3d(tw, sample_size, resnet=resnet)
     self.decoder = Decoder3d()
     self.decoder_embedding = DecoderEmbedding(e_dim=e_dim, add_spatial_coord=False)

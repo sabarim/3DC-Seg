@@ -6,17 +6,19 @@ from PIL import Image
 from scipy.misc import imresize
 from torch.nn import functional as F
 
-from inference_handlers.DAVIS import palette
 # cluster module
 from inference_handlers.infer_utils.CentreStitching import stitch_centres
 from inference_handlers.infer_utils.LinearTubeStitching import stitch_clips_best_overlap
+from inference_handlers.infer_utils.StitchWithGT import stitch_with_gt
+from loss.Loss import compute_loss
 from loss.SpatiotemporalEmbUtils import Cluster, Visualizer
 from network.NetworkUtil import run_forward
 from utils.AverageMeter import AverageMeter
+from utils.Constants import DAVIS_ROOT
 
 cluster = Cluster()
 # number of overlapping frames for stitching
-OVERLAPS = 2
+OVERLAPS = 0
 
 
 def infer_spatial_emb(dataloader, model, criterion, writer, args):
@@ -24,61 +26,71 @@ def infer_spatial_emb(dataloader, model, criterion, writer, args):
   ious = AverageMeter()
   # switch to evaluate mode
   model.eval()
+  palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
 
-  # for seq in dataloader.dataset.get_video_ids():
-  for seq in ['breakdance']:
+  for seq in dataloader.dataset.get_video_ids():
+  # for seq in ['dogs-jump']:
     ious_per_video = AverageMeter()
     dataloader.dataset.set_video_id(seq)
     last_predictions = None
+    stitched_instance_map = None
     all_instance_pred = None
     all_semantic_pred = None
     pred_mask_overlap = None
     for iter, input_dict in enumerate(dataloader):
       if not args.exhaustive and (iter % (args.tw - OVERLAPS)) != 0:
         continue
-      last_predictions = last_predictions
       info = input_dict['info']
       if iter == 0:
         shape = tuple(info['num_frames'].int().numpy(), ) + tuple(input_dict['images'].shape[-2:], )
         all_instance_pred = torch.zeros(shape).int()
         all_semantic_pred = torch.zeros(shape).int()
 
+      target = input_dict['target_extra']['similarity_raw_mask']
       instances_one_hot = input_dict['target_extra']['similarity_ref'][:, 1:].squeeze()
       batch_size = input_dict['images'].shape[0]
-      input, input_var, loss, pred, pred_extra = forward(criterion, input_dict, ious, model)
+      input, input_var, loss, pred, pred_extra = forward(criterion, input_dict, ious, model, args)
+      losses.update(loss)
       pred_mask = F.softmax(pred, dim=1)
-      if pred_mask_overlap  is not None:
-        pred_mask[:, -1, :OVERLAPS] = (pred_mask[:, -1, :OVERLAPS] + pred_mask_overlap.cuda()) / 2
-      pred_mask_overlap = pred_mask[:, -1, (pred_mask.shape[2] - OVERLAPS):].data
+      #if pred_mask_overlap  is not None:
+      #  pred_mask[:, -1, :OVERLAPS] = (pred_mask[:, -1, :OVERLAPS] + pred_mask_overlap.cuda()) / 2
+      #pred_mask_overlap = pred_mask[:, -1, (pred_mask.shape[2] - OVERLAPS):].data
       seed_map = torch.argmax(pred_mask, dim=1).float() * pred_mask[:, -1]
       if args.embedding_dim - 4 == 3:
-        # seed_map = torch.argmax(pred_mask, dim=1).float() * pred_extra[:, -1]
+        seed_map = torch.argmax(pred_mask, dim=1).float() * pred_extra[:, -1]
         pred_extra[:, -1] = seed_map
-        pred_spatemb = pred_extra
+        pred_spatemb = pred_extra.data.cpu()
       else:
         pred_spatemb = torch.cat((pred_extra.cuda(), seed_map.unsqueeze(1).float().cuda()), dim=1)
       instance_map, predictions = cluster.cluster(pred_spatemb[0], threshold=0.5, n_sigma=3,
-                                                  iou_meter = ious_per_video, in_mask=instances_one_hot)
+                                                  iou_meter = ious_per_video, in_mask=instances_one_hot.data.cpu())
 
       assert batch_size == 1
-      if last_predictions is not None:
-        # stitched_instance_map = stitch_clips_best_overlap(last_predictions, instance_map, OVERLAPS)
-        stitched_instance_map, last_predictions = stitch_centres(ref_predictions=last_predictions,
-                                                                 curr_predictions=predictions,
-                                                                 tube_shape=instance_map.shape)
+      if args.stitch == 'gt':
+        stitched_instance_map = stitch_with_gt(instance_map, instances_one_hot)
+      elif stitched_instance_map is not None:
+        stitched_instance_map = stitch_clips_best_overlap(stitched_instance_map, instance_map.data.cpu(), OVERLAPS)
+      # if last_predictions is not None:
+      #   stitched_instance_map, last_predictions = stitch_centres(ref_predictions=last_predictions,
+      #                                                            curr_predictions=predictions,
+      #                                                            tube_shape=instance_map.shape)
+      #   all_instance_pred[info['support_indices'][0][OVERLAPS:]] = stitched_instance_map[OVERLAPS:].int()
+      #   all_semantic_pred[info['support_indices'][0][OVERLAPS:]] = torch.argmax(pred_mask, dim=1).data.cpu().int()[0][OVERLAPS:]
       else:
-        stitched_instance_map = instance_map
+        stitched_instance_map = instance_map.data.cpu()
         last_predictions = predictions
-      # for i in range(input_dict['images'].shape[2]):
-        # visualise(input_dict, instance_map, instances, pred_spatemb, i, args, iter)
-        # save_results(input_dict['images'], predictions, info, args, i, iter)
-      all_instance_pred[info['support_indices'][0]] = stitched_instance_map.int()
+      all_instance_pred[info['support_indices'][0]] = stitched_instance_map.data.int().cpu()
       all_semantic_pred[info['support_indices'][0]] = torch.argmax(pred_mask, dim=1).data.cpu().int()[0]
+      for i in range(input_dict['images'].shape[2]):
+        visualise(input_dict, instance_map, target, pred_spatemb, i, args, iter)
+        # save_results(input_dict['images'], predictions, info, args, i, iter)
+      #all_instance_pred[info['support_indices'][0]] = stitched_instance_map.int()
+      #all_semantic_pred[info['support_indices'][0]] = torch.argmax(pred_mask, dim=1).data.cpu().int()[0]
 
 
     ious.update(ious_per_video.avg)
-    save_results(all_instance_pred, info, os.path.join('results', args.network_name))
-    save_results(all_semantic_pred, info, os.path.join('results', args.network_name, 'semantic_pred'))
+    save_results(all_instance_pred, info, os.path.join('results', args.network_name), palette)
+    save_results(all_semantic_pred, info, os.path.join('results', args.network_name, 'semantic_pred'), palette)
     print('Sequence {}\t IOU {iou}'.format(input_dict['info']['name'], iou=ious_per_video.avg))
 
   print('Finished Inference Loss {losses.avg:.5f} IOU {iou.avg: 5f}'
@@ -94,7 +106,7 @@ def visualise(input_dict, instance_map, instances, pred_extra, i, args, iter):
   base, _ = os.path.splitext(os.path.basename(input_dict['info']['name'][0]))
 
   im = input_dict['images'][0, :, i]
-  instances = instances[i]
+  instances = instances.squeeze()[i]
   instance_map = instance_map[i]
   # visualizer.display(im, 'image')
   visualizer.savePlt([instance_map.cpu(), instances.cpu()], 'pred', os.path.join(results_path, base +
@@ -112,9 +124,10 @@ def visualise(input_dict, instance_map, instances, pred_extra, i, args, iter):
                                                 '_{:05d}_seed.png'.format(iter+i)))
 
 
-def forward(criterion, input_dict, ious, model):
+def forward(criterion, input_dict, ious, model, args):
   input = input_dict["images"]
   target = input_dict["target"]
+  target_extra = None if 'target_extra' not in input_dict else input_dict['target_extra']
   if 'masks_guidance' in input_dict:
     masks_guidance = input_dict["masks_guidance"]
     masks_guidance = masks_guidance.float().cuda()
@@ -133,12 +146,14 @@ def forward(criterion, input_dict, ious, model):
   else:
     pred = F.interpolate(pred[0], target.shape[2:], mode="bilinear")
     pred_extra = F.interpolate(pred_extra, target.shape[2:], mode="bilinear")
-  loss = 0
+  # loss, loss_image, _, loss_extra = compute_loss(args, criterion, (pred, pred_extra), target, target_extra,
+  #                                                iou_meter=AverageMeter())
+  loss=0
 
   return input, input_var, loss, pred, pred_extra
 
 
-def save_results(pred, info, results_path):
+def save_results(pred, info, results_path, palette):
   results_path = os.path.join(results_path, info['name'][0])
   pred = pred.data.cpu().numpy().astype(np.uint8)
   (lh, uh), (lw, uw) = info['pad']

@@ -5,7 +5,7 @@ Licensed under the CC BY-NC 4.0 license (https://creativecommons.org/licenses/by
 
 import torch
 import torch.nn as nn
-
+import numpy as np
 from loss.LovaszLoss import lovasz_hinge
 
 
@@ -236,8 +236,8 @@ class SpatialEmbLoss(nn.Module):
 def calculate_iou(pred, label):
     intersection = ((label == 1) & (pred == 1)).sum()
     union = ((label == 1) | (pred == 1)).sum()
-    if not union:
+    if not union or union ==0:
         return 0
     else:
-        iou = intersection.item() / union.item()
+        iou = np.nan_to_num(intersection.item() / union.item())
         return iou

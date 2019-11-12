@@ -122,14 +122,6 @@ class Visualizer:
 class Cluster:
   def __init__(self, ):
     # coordinate map
-    # xm = torch.linspace(0, 1, 480).view(
-    #   1, 1, 1, -1).expand(1, 32, 480, 480)
-    # ym = torch.linspace(0, 0.4, 480).view(
-    #   1, 1, -1, 1).expand(1, 32, 480, 480)
-    # zm = torch.linspace(0, 0.45, 32).view(
-    #   1, -1, 1, 1).expand(1, 32, 480, 480)
-
-    # coordinate map
     x = torch.linspace(0, 2, 960).view(
       1, 1, 1, -1).expand(1, 32, 480, 960)
     y = torch.linspace(0, 1, 480).view(
@@ -138,7 +130,16 @@ class Cluster:
       1, -1, 1, 1).expand(1, 32, 480, 960)
     xyzm = torch.cat((t, y, x), 0)
 
-    self.xyzm = xyzm.cuda()
+    # coordinate map
+    # x = torch.linspace(0, 2, 960).view(
+    #   1, 1, 1, -1).expand(1, 32, 512, 960)
+    # y = torch.linspace(0, 1, 512).view(
+    #   1, 1, -1, 1).expand(1, 32, 512, 960)
+    # t = torch.linspace(0, 0.1, 32).view(
+    #   1, -1, 1, 1).expand(1, 32, 512, 960)
+    # xyzm = torch.cat((t, y, x), 0)
+
+    self.xyzm = xyzm
 
   def cluster_with_gt(self, prediction, instance, n_sigma=1, ):
 
@@ -186,14 +187,14 @@ class Cluster:
     count = 1
     # mask = seed_map > 0.5
     mask = seed_map.bool()
-    if mask.sum() > 128 * time:
+    if mask.sum() > 128:
 
       spatial_emb_masked = spatial_emb[mask.expand_as(spatial_emb)].view(3, -1)
       sigma_masked = sigma[mask.expand_as(sigma)].view(n_sigma, -1)
       seed_map_masked = seed_map[mask].view(1, -1)
 
-      unclustered = torch.ones(mask.sum()).byte().cuda()
-      instance_map_masked = torch.zeros(mask.sum()).byte().cuda()
+      unclustered = torch.ones(mask.sum()).byte()
+      instance_map_masked = torch.zeros(mask.sum()).byte()
 
       # track used masks for computing iou
       used_ids = {}
@@ -237,7 +238,7 @@ class Cluster:
       if in_mask.shape[1] == 0 and len(instances == 0):
         iou_meter.update(1)
       else:
-        iou_meter.update(np.mean(list(used_ids.values())))
+        iou_meter.update(np.nan_to_num(np.mean(list(used_ids.values()))))
 
     return instance_map, instances
 
