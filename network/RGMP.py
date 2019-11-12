@@ -95,7 +95,7 @@ class Decoder(nn.Module):
     p4 = self.pred4(F.relu(m4))
     p5 = self.pred5(F.relu(m5))
 
-    p = F.upsample(p2, scale_factor=4, mode='bilinear')
+    p = F.interpolate(p2, scale_factor=4, mode='bilinear')
 
     return p, p2, p3, p4, p5
 

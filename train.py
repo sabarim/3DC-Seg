@@ -19,18 +19,11 @@ from utils.Saver import load_weights, save_checkpoint
 from utils.dataset import get_dataset
 from utils.util import get_lr_schedulers, show_image_summary, get_model
 
-NUM_EPOCHS = 400
-TRAIN_KITTI = False
-MASK_CHANGE_THRESHOLD = 1000
-
-BBOX_CROP = True
-BEST_IOU=0
-
-
-palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
-
-
 def train(train_loader, model, criterion, optimizer, epoch, foo):
+  """
+
+  :type foo: object
+  """
   global count
   batch_time = AverageMeter()
   data_time = AverageMeter()
@@ -172,7 +165,7 @@ if __name__ == '__main__':
       # model = apex.parallel.DistributedDataParallel(model, delay_allreduce=True)
 
     # model.cuda()
-    print(summary(model, tuple((256,256)), batch_size=1))
+    #print(summary(model, tuple((256,256)), batch_size=1))
     writer = SummaryWriter(log_dir="runs/" + args.network_name)
 
     params = []
@@ -180,8 +173,8 @@ if __name__ == '__main__':
       if value.requires_grad:
         params += [{'params':[value],'lr':args.lr, 'weight_decay': 4e-5}]
 
-    criterion = torch.nn.BCEWithLogitsLoss(reduce=False) if args.n_classes == 2 else \
-      torch.nn.CrossEntropyLoss(reduce=False)
+    criterion = torch.nn.BCEWithLogitsLoss(reduction="none") if args.n_classes == 2 else \
+      torch.nn.CrossEntropyLoss(reduction="none")
     print("Using {} criterion", criterion)
     # iters_per_epoch = len(Trainloader)
     # model.eval()

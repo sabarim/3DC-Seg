@@ -18,7 +18,7 @@ class Refine(nn.Module):
     sr = self.convFS3(F.relu(sr))
     s = s + sr
 
-    m = s + F.upsample(pm, scale_factor=self.scale_factor, mode='bilinear')
+    m = s + F.interpolate(pm, scale_factor=self.scale_factor, mode='bilinear')
 
     mr = self.convMM1(F.relu(m))
     mr = self.convMM2(F.relu(mr))
@@ -42,7 +42,7 @@ class Refine3d(nn.Module):
     sr = self.convFS3(F.relu(sr))
     s = s + sr
 
-    m = s + F.upsample(pm, size=s.shape[-3:], mode='trilinear')
+    m = s + F.interpolate(pm, size=s.shape[-3:], mode='trilinear')
 
     mr = self.convMM1(F.relu(m))
     mr = self.convMM2(F.relu(mr))

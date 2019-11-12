@@ -51,7 +51,7 @@ class DAVIS(data.Dataset):
     self.occluders = load_occluders(PASCAL_VOC_PATH)
 
   def set_paths(self, imset, resolution, root):
-    self.mask_dir = os.path.join(root, 'Annotations', resolution)
+    self.mask_dir = os.path.join(root, 'Annotations_unsupervised', resolution)
     self.image_dir = os.path.join(root, 'JPEGImages', resolution)
     _imset_dir = os.path.join(root, 'ImageSets')
     _imset_f = os.path.join(_imset_dir, imset)
@@ -67,9 +67,10 @@ class DAVIS(data.Dataset):
         self.num_objects[_video] = np.max(_mask)
         self.shape[_video] = np.shape(_mask)
         self.img_list += list(glob.glob(os.path.join(self.image_dir, _video, '*.jpg')))
+
       if self.is_train:
         self.reference_list = [f for f in self.img_list if self.img_list if np.sum(
-          np.array(Image.open(f.replace('JPEGImages', 'Annotations').replace('.jpg', '.png'))))]
+          np.array(Image.open(f.replace('JPEGImages', 'Annotations_unsupervised').replace('.jpg', '.png'))))]
 
   def set_video_id(self, video):
     self.current_video = video
@@ -217,8 +218,11 @@ class DAVIS(data.Dataset):
     # remove masks with some probability to make sure that the network can focus on intermediate frames
     # if self.is_train and np.random.choice([True, False], 1, p=[0.15,0.85]):
     #   masks_guidance[0, -2] = np.zeros(masks_guidance.shape[2:])
+
+    #Can be used for setting proposals if desired, but for now it isn't neccessary and will be ignored
+    proposals = np.concatenate(th_proposals, axis=1)
     return {'images': np.concatenate(th_frames, axis=1), 'masks_guidance':masks_guidance, 'info': info,
-            'target': target, "proposals": np.concatenate(th_proposals, axis=1), "raw_proposals": raw_proposals,
+            'target': target, "proposals": target, "raw_proposals": raw_proposals,
             'raw_masks': np.concatenate(th_masks_raw, axis=1)}
 
   def get_current_sequence(self, img_file):

@@ -3,9 +3,8 @@ from collections import OrderedDict
 import numpy as np
 import torch
 from PIL import Image
-from utils.Constants import font
+import utils.Constants as Constants
 from utils.util import ToLabel
-
 
 def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
     start_epoch = 0
@@ -17,7 +16,12 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
     state = model.state_dict()
     # load saved model if specified
     if loadepoch is not None:
-      print('Loading checkpoint {}@Epoch {}{}...'.format(font.BOLD, loadepoch, font.END))
+      print('Loading checkpoint {}@Epoch {}{}...'.format(Constants.font.BOLD, loadepoch, Constants.font.END))
+      if loadepoch == '0':
+        # transform, checkpoint provided by RGMP
+        load_name = Constants.MODEL_ROOT + 'resnet-50-kinetics.pth'
+        state = model.state_dict()
+        checkpoint = torch.load(load_name)
       if loadepoch == 'siam':
         # transform, checkpoint provided by RGMP
         load_name2d = 'saved_models/rgmp.pth'
@@ -32,19 +36,26 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
         # checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
       elif loadepoch == 'kinetics':
         # transform, checkpoint provided by RGMP
-        load_name = 'saved_models/resnet-50-kinetics.pth'
+        load_name = Constants.MODEL_ROOT + 'resnet-50-kinetics.pth'
+        state = model.state_dict()
         checkpoint = torch.load(load_name)
         # checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
         checkpoint = {"model": OrderedDict([(k.lower().replace('module.', 'encoder.'), v)
                                             for k, v in checkpoint['state_dict'].items()]), 'epoch': 0}
       elif 'pretrain' in loadepoch:
-        load_name = os.path.join('saved_models', loadepoch + '.pth')
+        load_name = os.path.join(Constants.MODEL_ROOT, loadepoch + '.pth')
         checkpoint = load_pretrained_weights(load_name)
-      else:
-        load_name = os.path.join(model_dir,
+      elif ("csn/" in loadepoch or "2+1d" in loadepoch) and "model_best" not in loadepoch:
+        load_name = os.path.join('saved_models/',
                                  '{}.pth'.format(loadepoch))
         checkpoint = torch.load(load_name)
-        start_epoch = checkpoint['epoch'] + 1 if args.task == "train" else 0
+        start_epoch = 0
+        checkpoint = {"model" : checkpoint, "epoch" : start_epoch}
+      else:
+        load_name = os.path.join('saved_models/',
+                                 '{}.pth'.format(loadepoch))
+        checkpoint = torch.load(load_name)
+        start_epoch = checkpoint['epoch'] + 1 if (args.task == "train" and "epoch" in checkpoint) else 0
         # checkpoint["model"] = OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint["model"].items()])
       # remove module. prefix
       checkpoint['model'] = {k.replace('module.', ''):v for k, v in checkpoint['model'].items()}
