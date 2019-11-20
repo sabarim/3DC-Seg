@@ -138,7 +138,7 @@ class Bottleneck_depthwise_ip(Bottleneck):
         return out
 
 class Bottleneck_depthwise_ir(Bottleneck):
-    def __init__(self, inplanes, planes, stride=1, downsample=None):
+    def __init__(self, inplanes, planes, stride=1, downsample=None, dilation=1):
         super(Bottleneck_depthwise_ir, self).__init__(inplanes, planes, stride, downsample)
         self.conv2 = nn.Conv3d(planes, planes, kernel_size=3, stride=stride,
                                padding=1, bias=False, groups=planes)
@@ -157,8 +157,8 @@ class ResNet(nn.Module):
         self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], shortcut_type)
         self.layer2 = self._make_layer(block, 128, layers[1], shortcut_type, stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], shortcut_type, stride=(1,2,2), dilation = (2,1,1))
-        self.layer4 = self._make_layer(block, 512, layers[3], shortcut_type, stride=(1,2,2), dilation = (2,1,1))
+        self.layer3 = self._make_layer(block, 256, layers[2], shortcut_type, stride=2)
+        self.layer4 = self._make_layer(block, 512, layers[3], shortcut_type, stride=2)
         last_duration = math.ceil(sample_duration / 16)
         last_size = math.ceil(sample_size / 32)
         self.avgpool = nn.AvgPool3d((last_duration, last_size, last_size), stride=1)
@@ -226,7 +226,7 @@ class ResNetNoTS(ResNet):
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
         self.layer1 = self._make_layer(block, 64, layers[0], shortcut_type)
-        self.layer2 = self._make_layer(block, 128, layers[1], shortcut_type, stride=(1, 2, 2), dilation=(3, 1, 1))
+        self.layer2 = self._make_layer(block, 128, layers[1], shortcut_type, stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], shortcut_type, stride=(1, 2, 2), dilation=(2, 1, 1))
         self.layer4 = self._make_layer(block, 512, layers[3], shortcut_type, stride=(1, 2, 2), dilation=(2, 1, 1))
         last_duration = math.ceil(sample_duration / 16)
@@ -296,6 +296,18 @@ def resnet50_no_ts(**kwargs):
     return model
 
 
+def resnet50_csn_ir(**kwargs):
+    """Constructs a channel-separated ResNet-152 model with reduced interactions.
+    """
+    model = ResNet(Bottleneck_depthwise_ir, [3, 4, 6, 3], **kwargs)
+
+    # Facebook uses only a temporal kernel size of 3 in its first layer, which
+    # needs to be replicated here
+    model.conv1 = nn.Conv3d(3, 64, kernel_size=(3, 7, 7), stride=(1, 2, 2),
+                            padding=(1, 3, 3), bias=False)
+    return model
+
+
 def resnet101(**kwargs):
     """Constructs a ResNet-101 model.
     """
@@ -325,6 +337,7 @@ def resnet152_csn_ip(**kwargs):
                            padding=(3, 3, 3), bias=False)
     return model
 
+
 def resnet152_csn_ir(**kwargs):
     """Constructs a channel-separated ResNet-152 model with reduced interactions.
     """
@@ -333,7 +346,7 @@ def resnet152_csn_ir(**kwargs):
     #Facebook uses only a temporal kernel size of 3 in its first layer, which
     #needs to be replicated here
     model.conv1 = nn.Conv3d(3, 64, kernel_size=(3,7,7), stride=(1, 2, 2),
-                           padding=(3, 3, 3), bias=False)
+                           padding=(1, 3, 3), bias=False)
     return model
 
 #Facebooks version uses special stem in r2+1d network: (conv-batchnorm-relu)

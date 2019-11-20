@@ -82,6 +82,9 @@ def parse_args():
   parser.add_argument('--exhaustive', dest='exhaustive',
                       help='Infer for clips starting from every frame',
                       default=False, type=bool)
+  parser.add_argument('--stitch', dest='stitch',
+                      help='tube stitching strategy',
+                      default='linear', type=str)
 
   # BPTT
   parser.add_argument('--bptt', dest='bptt_len',
@@ -158,9 +161,9 @@ def parse_args():
                       type=str)
 
   # mixed precision training
-  parser.add_argument('--mixed_precision', dest='mixed_precision',
-                      help='True for mixed precision training',
-                      default=False, type=bool)
+  parser.add_argument('--precision', dest='precision',
+                      help='Should be one of [fp32, fp16, mixed]',
+                      default='fp32', type=str)
   parser.add_argument('--print_freq', dest='print_freq',
                       help='Frequency of statistics printing',
                       default=1, type=int)

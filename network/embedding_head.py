@@ -36,9 +36,9 @@ class NonLocalBlock3DWithDownsampling(nn.Module):
 
     @staticmethod
     def create_spatiotemporal_grid(height, width, time, t_scale, dtype=torch.float32, device="cpu"):
-        x = (torch.arange(width, dtype=dtype, device=device)) / ((width - 1) * 0.25) - 2
-        y = (torch.arange(height, dtype=dtype, device=device)) / ((height - 1) * 0.5) - 1
-        t = ((torch.arange(time, dtype=dtype, device=device)) / ((time - 1) * 0.5) - 1) * t_scale
+        x = (torch.arange(width)).float().cuda() / ((width - 1) * 0.25) - 2
+        y = (torch.arange(height)).float().cuda() / ((height - 1) * 0.5) - 1
+        t = ((torch.arange(time)).float().cuda() / ((time - 1) * 0.5) - 1) * t_scale
         return torch.stack(torch.meshgrid(t, y, x), dim=0)  # [3, T, H, W]
 
     def forward(self, x):

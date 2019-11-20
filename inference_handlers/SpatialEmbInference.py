@@ -7,6 +7,8 @@ from scipy.misc import imresize
 from torch.nn import functional as F
 
 # cluster module
+from torch.utils.data import DataLoader
+
 from inference_handlers.infer_utils.CentreStitching import stitch_centres
 from inference_handlers.infer_utils.LinearTubeStitching import stitch_clips_best_overlap
 from inference_handlers.infer_utils.StitchWithGT import stitch_with_gt
@@ -21,17 +23,20 @@ cluster = Cluster()
 OVERLAPS = 0
 
 
-def infer_spatial_emb(dataloader, model, criterion, writer, args):
+def infer_spatial_emb(dataset, model, criterion, writer, args, distributed=False):
   losses = AverageMeter()
   ious = AverageMeter()
   # switch to evaluate mode
   model.eval()
-  palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
+  palette = Image.open(DAVIS_ROOT + '/Annotations_unsupervised/480p/bear/00000.png').getpalette()
 
-  for seq in dataloader.dataset.get_video_ids():
-  # for seq in ['dogs-jump']:
+  for seq in dataset.get_video_ids():
+  # for seq in ['shooting', 'soapbox']:
     ious_per_video = AverageMeter()
-    dataloader.dataset.set_video_id(seq)
+    dataset.set_video_id(seq)
+    test_sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=False) if distributed else None
+    dataloader = DataLoader(dataset, batch_size=1, num_workers=1, shuffle=False, sampler=test_sampler, pin_memory=True)
+
     last_predictions = None
     stitched_instance_map = None
     all_instance_pred = None
@@ -57,7 +62,7 @@ def infer_spatial_emb(dataloader, model, criterion, writer, args):
       #pred_mask_overlap = pred_mask[:, -1, (pred_mask.shape[2] - OVERLAPS):].data
       seed_map = torch.argmax(pred_mask, dim=1).float() * pred_mask[:, -1]
       if args.embedding_dim - 4 == 3:
-        seed_map = torch.argmax(pred_mask, dim=1).float() * pred_extra[:, -1]
+        # seed_map = torch.argmax(pred_mask, dim=1).float() * pred_extra[:, -1]
         pred_extra[:, -1] = seed_map
         pred_spatemb = pred_extra.data.cpu()
       else:

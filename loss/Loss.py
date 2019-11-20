@@ -33,7 +33,7 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
       loss_image = criterion(pred_mask[:, -1], target.squeeze(1).cuda().float())
     loss_mask = bootstrapped_ce_loss(loss_image)
 
-  loss_extra = 0
+  loss_extra = torch.tensor(0).cuda().float()
   if pred_extra is not None:
     # estimate loss for pixel level similarity
     if 'similarity' in args.losses:
