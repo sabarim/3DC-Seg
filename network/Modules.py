@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+
 class Refine(nn.Module):
   def __init__(self, inplanes, planes, scale_factor=2):
     super(Refine, self).__init__()
@@ -48,6 +49,45 @@ class Refine3d(nn.Module):
     mr = self.convMM2(F.relu(mr))
     m = m + mr
     return m
+
+
+class Refine3dConvTranspose(nn.Module):
+  def __init__(self, inplanes, planes, scale_factor=2):
+    super(Refine3dConvTranspose, self).__init__()
+    self.convFS1 = nn.Conv3d(inplanes, planes, kernel_size=3, padding=1)
+    self.convFS2 = nn.Conv3d(planes, planes, kernel_size=3, padding=1)
+    self.convFS3 = nn.Conv3d(planes, planes, kernel_size=3, padding=1)
+    self.convMM1 = nn.Conv3d(planes, planes, kernel_size=3, padding=1)
+    self.convMM2 = nn.Conv3d(planes, planes, kernel_size=3, padding=1)
+    # Use transpose conv to upsample the feature maps
+    self.conv_t = nn.ConvTranspose3d(planes, planes, 2, stride=2, bias=True)
+    self.scale_factor = scale_factor
+
+  def forward(self, f, pm):
+    s = self.convFS1(f)
+    sr = self.convFS2(F.relu(s))
+    sr = self.convFS3(F.relu(sr))
+    s = s + sr
+
+    m = s + F.relu(self.conv_t(pm))
+
+    mr = self.convMM1(F.relu(m))
+    mr = self.convMM2(F.relu(mr))
+    m = m + mr
+    return m
+
+
+class UpsamplerBlock(nn.Module):
+  def __init__(self, in_channels, out_channels):
+    super().__init__()
+    self.conv = nn.ConvTranspose3d(
+      in_channels, out_channels, 2, stride=2, bias=True)
+    # self.bn = nn.BatchNorm2d(in_channels, eps=1e-3)
+
+  def forward(self, input):
+    output = self.conv(input)
+    # output = self.bn(output)
+    return F.relu(output)
 
 
 class Refine3dDG(nn.Module):
