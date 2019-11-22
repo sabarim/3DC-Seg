@@ -37,8 +37,8 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
 
   end = time.time()
   for i, input_dict in enumerate(train_loader):
-    iou, loss, loss_image, output, loss_extra = forward(args, criterion, input_dict, ious,
-                                                                                      model, ious_extra=ious_extra)
+    iou, loss, loss_image, output, loss_extra = forward(args, criterion, input_dict,
+                                                        model, ious_extra=ious_extra)
     losses.update(loss.cpu().item(), 1)
     losses_extra.update(loss_extra.cpu().item(), 1)
     foo.add_scalar("data/loss", loss, count)
@@ -94,10 +94,10 @@ def validate(val_loader, model, criterion, epoch, foo):
     for i, input_dict in enumerate(val_loader):
       with torch.no_grad():
         # compute output
-        iou, loss, loss_image, output, loss_extra = forward(args, criterion, input_dict, ious,
+        iou, loss, loss_image, output, loss_extra = forward(args, criterion, input_dict,
                                                             model, ious_extra=ious_extra)
-        ious_video.update(np.mean(iou))
-        losses.update(loss.item(), input.size(0))
+        ious_video.update(iou.item())
+        losses.update(loss.item(), 1)
         losses_extra.update(loss_extra.item(), 1)
         # measure elapsed time
         batch_time.update(time.time() - end)
@@ -132,17 +132,18 @@ if __name__ == '__main__':
     args = parse_args()
     count = 0
     MODEL_DIR = os.path.join('saved_models', args.network_name)
-    print("Arguments used: {}".format(args), flush=True)
+    if args.local_rank == 0:
+      print("Arguments used: {}".format(args), flush=True)
 
     trainset, testset = get_dataset(args)
     sampler = RandomSampler(trainset, replacement=True, num_samples=args.data_sample) \
       if args.data_sample is not None else None
     shuffle = True if args.data_sample is None else False
     trainloader = DataLoader(trainset, batch_size=args.bs, num_workers=args.num_workers, shuffle=shuffle, sampler=sampler)
-    testloader = DataLoader(testset, batch_size=1, num_workers=1, shuffle=False)
+    testloader = DataLoader(testset, batch_size=1, shuffle=False, pin_memory=True)
     model = get_model(args, network_models)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
-    model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval = \
+    model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval, _ = \
       load_weights(model, optimizer, args, MODEL_DIR, scheduler=None)  # params
     lr_schedulers = get_lr_schedulers(optimizer, args, 0)
 
@@ -165,7 +166,7 @@ if __name__ == '__main__':
       # model = apex.parallel.DistributedDataParallel(model, delay_allreduce=True)
 
     # model.cuda()
-    #print(summary(model, tuple((256,256)), batch_size=1))
+    # print(summary(model, tuple((256,256)), batch_size=1))
     writer = SummaryWriter(log_dir="runs/" + args.network_name)
 
     params = []
@@ -209,7 +210,7 @@ if __name__ == '__main__':
     elif args.task == 'eval':
       validate(testloader, model, criterion, 1, writer)
     elif 'infer' in args.task:
-      infer(args, testloader, model, criterion, writer)
+      infer(args, testset, model, criterion, writer)
     else:
       raise ValueError("Unknown task {}".format(args.task))
 

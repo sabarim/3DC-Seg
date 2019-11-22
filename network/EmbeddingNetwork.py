@@ -85,10 +85,11 @@ class DecoderEmbedding(DecoderWithEmbedding):
 
 # Multi scale decoder
 class MultiScaleDecoder(Decoder3d):
-  def __init__(self, n_classes=2):
+  def __init__(self, n_classes=2, add_spatial_coord = True):
     super(MultiScaleDecoder, self).__init__(n_classes)
     self.convG1 = nn.Conv3d(2048, 256, kernel_size=3, padding=1)
-    self.embedding_head = MultiscaleCombinedHeadLongTemporalWindow(256, n_classes,True, True,seed_map=True)
+    self.embedding_head = MultiscaleCombinedHeadLongTemporalWindow(256, n_classes,True, True,seed_map=True,
+                                                                   add_spatial_coord=add_spatial_coord)
 
   def forward(self, r5, r4, r3, r2, support):
     r = self.convG1(F.relu(r5))
@@ -161,13 +162,18 @@ class Resnet3dCSNiRSameDecoders(Resnet3dEmbeddingMultiDecoder):
 
 
 class Resnet3dCSNiRMultiScale(Resnet3d):
-  def __init__(self, tw=16, sample_size = 112, e_dim=7):
+  def __init__(self, tw=16, sample_size = 112, e_dim=7, add_spatial_coord=True):
     super(Resnet3dCSNiRMultiScale, self).__init__()
     self.encoder = Encoder3d_csn_ir(tw, sample_size)
-    self.decoder = MultiScaleDecoder()
+    self.decoder = MultiScaleDecoder(add_spatial_coord=add_spatial_coord)
 
   def forward(self, x, ref):
     r5, r4, r3, r2 = self.encoder.forward(x, ref)
     p = self.decoder.forward(r5, r4, r3, r2, None)
 
     return p
+
+
+class Resnet3dCSNiRMultiScaleNoCoord(Resnet3dCSNiRMultiScale):
+  def __init__(self):
+    super(Resnet3dCSNiRMultiScaleNoCoord, self).__init__(add_spatial_coord=False)

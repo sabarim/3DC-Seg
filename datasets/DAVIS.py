@@ -192,8 +192,8 @@ class DAVIS(data.Dataset):
 
       # padding size to be divide by 32
       h, w = raw_mask.shape
-      new_h = h + 32 - h % 32
-      new_w = w + 32 - w % 32
+      new_h = h + 32 - h % 32 if h % 32 > 0 else h
+      new_w = w + 32 - w % 32 if w % 32 > 0 else w
       # print(new_h, new_w)
       lh, uh = (new_h - h) / 2, (new_h - h) / 2 + (new_h - h) % 2
       lw, uw = (new_w - w) / 2, (new_w - w) / 2 + (new_w - w) % 2

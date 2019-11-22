@@ -14,14 +14,18 @@ class MultiscaleCombinedHeadLongTemporalWindow(nn.Module):
         self.seed_map = kwargs.get("seed_map", False)
         nonlocal_inter_channels = kwargs.get("nonlocal_inter_channels", 128)
         conv_inter_channels = kwargs.get("conv_inter_channels", 128)
+        self.add_spatial_coord = kwargs.get("add_spatial_coord", False)
+        if not self.add_spatial_coord:
+            print("Spatial coordinates are not added to the feature maps in the embedding head")
 
         # 32/8 (spatial/temporal stride) branch
-        self.nonlocal_32x = NonLocalBlock3DWithDownsampling(in_channels + 3, nonlocal_inter_channels, 1, in_channels)
+        nl_in_channels = in_channels + 3 if self.add_spatial_coord else in_channels
+        self.nonlocal_32x = NonLocalBlock3DWithDownsampling(nl_in_channels, nonlocal_inter_channels, 1, in_channels)
         self.conv_32x_1 = nn.Conv3d(in_channels, conv_inter_channels, kernel_size=(1, 3, 3), padding=(0, 1, 1))
         self.conv_32x_2 = nn.Conv3d(conv_inter_channels, conv_inter_channels, kernel_size=3, padding=1)
 
         # 16/4 branch
-        self.nonlocal_16x = NonLocalBlock3DWithDownsampling(in_channels + 3, nonlocal_inter_channels, 1, in_channels)
+        self.nonlocal_16x = NonLocalBlock3DWithDownsampling(nl_in_channels, nonlocal_inter_channels, 1, in_channels)
         self.conv_16x_1 = nn.Conv3d(in_channels, conv_inter_channels, kernel_size=(1, 3, 3), padding=(0, 1, 1))
 
         # 8/2 branch
@@ -55,7 +59,8 @@ class MultiscaleCombinedHeadLongTemporalWindow(nn.Module):
 
         grid = self.nonlocal_32x.create_spatiotemporal_grid(
             H, W, T, self.time_scale, x.dtype, x.device).unsqueeze(0).expand(N, -1, -1, -1, -1)  # [N, 3, 1, 1, 1]
-        x = x + self.nonlocal_32x(torch.cat((x, grid.detach()), dim=1))
+        t = torch.cat((x, grid.detach()), dim=1) if self.add_spatial_coord else x
+        x = x + self.nonlocal_32x(t)
 
         # 32/8 -> 16/4
         x = F.interpolate(x, scale_factor=2., mode='trilinear', align_corners=False)
@@ -73,7 +78,8 @@ class MultiscaleCombinedHeadLongTemporalWindow(nn.Module):
 
         grid = self.nonlocal_16x.create_spatiotemporal_grid(
             H, W, T, self.time_scale, x.dtype, x.device).unsqueeze(0).expand(N, -1, -1, -1, -1)  # [N, 3, 1, 1, 1]
-        x = x + self.nonlocal_16x(torch.cat((x, grid.detach()), dim=1))
+        t = torch.cat((x, grid.detach()), dim=1) if self.add_spatial_coord else x
+        x = x + self.nonlocal_16x(t)
 
         # 16/4 -> 8/2
         x = F.interpolate(x, scale_factor=2., mode='trilinear', align_corners=False)

@@ -50,10 +50,11 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
                                  '{}.pth'.format(loadepoch))
         checkpoint = torch.load(load_name)
         start_epoch = 0
-        checkpoint = {"model" : checkpoint, "epoch" : start_epoch}
+        checkpoint = {"model" : OrderedDict([('encoder.' + k.lower(), v)
+                                            for k, v in checkpoint.items()]), "epoch" : start_epoch}
       else:
-        load_name = os.path.join('saved_models/',
-                                 '{}.pth'.format(loadepoch))
+        load_name = os.path.join('saved_models/', args.network_name,
+                     '{}.pth'.format(loadepoch))
         checkpoint = torch.load(load_name)
         start_epoch = checkpoint['epoch'] + 1 if (args.task == "train" and "epoch" in checkpoint) else 0
         # checkpoint["model"] = OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint["model"].items()])
@@ -67,7 +68,7 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
                                                                                         len(state.keys())))
       for key in missing_keys:
         checkpoint_valid[key] = state[key]
-
+      
       model.load_state_dict(checkpoint_valid)
       if args.task == 'train':
         if 'optimizer' in checkpoint.keys() :
@@ -76,7 +77,7 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
         if 'scheduler' in checkpoint.keys() and checkpoint['scheduler'] is not None and scheduler is not None:
           scheduler.load_state_dict(checkpoint['scheduler'].state_dict())
         if 'amp' in checkpoint.keys() and checkpoint['amp'] is not None and amp is not None:
-          amp.load_state_dict(checkpoint['amp'])
+          amp = checkpoint['amp']
         if 'best_iou' in checkpoint.keys() and checkpoint['task'] == 'train':
           best_iou_train = checkpoint['best_iou']
           best_loss_train = checkpoint['loss']
@@ -88,7 +89,7 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
       torch.cuda.empty_cache()
       print('Loaded weights from {}'.format(load_name))
 
-    return model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval
+    return model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval, amp
 
 
 def load_pretrained_weights(load_name):
@@ -124,7 +125,7 @@ def save_checkpoint(epoch, iou_mean, loss_mean, model, optimiser, save_name, is_
               'loss': loss_mean,
               'task': 'train' if is_train else 'eval',
               'scheduler': scheduler,
-              'amp': amp.state_dict()
+              'amp': amp.state_dict() if amp is not None else amp
               },
              save_name)
   print("Saving epoch {} with IOU {}".format(epoch, iou_mean))

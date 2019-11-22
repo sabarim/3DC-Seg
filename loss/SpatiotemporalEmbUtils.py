@@ -187,7 +187,7 @@ class Cluster:
     count = 1
     # mask = seed_map > 0.5
     mask = seed_map.bool()
-    if mask.sum() > 128:
+    if mask.sum() > 128*time:
 
       spatial_emb_masked = spatial_emb[mask.expand_as(spatial_emb)].view(3, -1)
       sigma_masked = sigma[mask.expand_as(sigma)].view(n_sigma, -1)
@@ -198,7 +198,7 @@ class Cluster:
 
       # track used masks for computing iou
       used_ids = {}
-      while (unclustered.sum() > 128):
+      while (unclustered.sum() > 128*time):
         seed = (seed_map_masked * unclustered.float()).argmax().item()
         seed_score = (seed_map_masked * unclustered.float()).max().item()
         if seed_score < threshold:
@@ -211,7 +211,7 @@ class Cluster:
 
         proposal = (dist > 0.5).squeeze()
 
-        if proposal.sum() > 128:
+        if proposal.sum() > 128*time:
           if unclustered[proposal].sum().float() / proposal.sum().float() > 0.5:
             instance_map_masked[proposal.squeeze()] = count
             instance_mask = torch.zeros(time, height, width).int()

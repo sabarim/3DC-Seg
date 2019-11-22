@@ -31,7 +31,7 @@ def infer_spatial_emb(dataset, model, criterion, writer, args, distributed=False
   palette = Image.open(DAVIS_ROOT + '/Annotations_unsupervised/480p/bear/00000.png').getpalette()
 
   for seq in dataset.get_video_ids():
-  # for seq in ['shooting', 'soapbox']:
+  # for seq in ['blackswan']:
     ious_per_video = AverageMeter()
     dataset.set_video_id(seq)
     test_sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=False) if distributed else None
@@ -62,7 +62,7 @@ def infer_spatial_emb(dataset, model, criterion, writer, args, distributed=False
       #pred_mask_overlap = pred_mask[:, -1, (pred_mask.shape[2] - OVERLAPS):].data
       seed_map = torch.argmax(pred_mask, dim=1).float() * pred_mask[:, -1]
       if args.embedding_dim - 4 == 3:
-        # seed_map = torch.argmax(pred_mask, dim=1).float() * pred_extra[:, -1]
+        seed_map = torch.argmax(pred_mask, dim=1).float() * pred_extra[:, -1]
         pred_extra[:, -1] = seed_map
         pred_spatemb = pred_extra.data.cpu()
       else:
@@ -86,8 +86,8 @@ def infer_spatial_emb(dataset, model, criterion, writer, args, distributed=False
         last_predictions = predictions
       all_instance_pred[info['support_indices'][0]] = stitched_instance_map.data.int().cpu()
       all_semantic_pred[info['support_indices'][0]] = torch.argmax(pred_mask, dim=1).data.cpu().int()[0]
-      for i in range(input_dict['images'].shape[2]):
-        visualise(input_dict, instance_map, target, pred_spatemb, i, args, iter)
+      # for i in range(input_dict['images'].shape[2]):
+      #   visualise(input_dict, instance_map, target, pred_spatemb, i, args, iter)
         # save_results(input_dict['images'], predictions, info, args, i, iter)
       #all_instance_pred[info['support_indices'][0]] = stitched_instance_map.int()
       #all_semantic_pred[info['support_indices'][0]] = torch.argmax(pred_mask, dim=1).data.cpu().int()[0]
@@ -162,8 +162,9 @@ def save_results(pred, info, results_path, palette):
   results_path = os.path.join(results_path, info['name'][0])
   pred = pred.data.cpu().numpy().astype(np.uint8)
   (lh, uh), (lw, uw) = info['pad']
+  h, w = pred.shape[-2:]
   for f in range(len(pred)):
-    M = pred[f, lh[0]:-uh[0], lw[0]:-uw[0]]
+    M = pred[f, lh[0]:h-uh[0], lw[0]:w-uw[0]]
     img_M = Image.fromarray(imresize(M, info['shape'], interp='nearest'))
     img_M.putpalette(palette)
     if not os.path.exists(results_path):
