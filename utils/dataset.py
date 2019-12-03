@@ -1,4 +1,4 @@
-from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT
+from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT, YOUTUBEVIS_ROOT
 
 
 def get_dataset(args):
@@ -53,6 +53,11 @@ def get_dataset(args):
   elif args.train_dataset == "yvos_embedding":
     from datasets.YoutubeVOS import YoutubeVOSEmbedding
     trainset = YoutubeVOSEmbedding(YOUTUBEVOS_ROOT, imset='train', is_train=True,
+                                 random_instance=args.random_instance, crop_size=args.crop_size,
+                                 resize_mode=args.resize_mode, temporal_window=args.tw)
+  elif args.train_dataset == "youtube_vis":
+    from datasets.YoutubeVIS import YoutubeVISDataset
+    trainset = YoutubeVISDataset(YOUTUBEVIS_ROOT, imset='train', is_train=True,
                                  random_instance=args.random_instance, crop_size=args.crop_size,
                                  resize_mode=args.resize_mode, temporal_window=args.tw)
   elif args.train_dataset == "davis_3d":

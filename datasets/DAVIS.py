@@ -182,6 +182,7 @@ class DAVIS(data.Dataset):
     th_masks = []
     th_mask_void = []
     th_proposals = []
+    th_raw_proposals = []
     th_pc = []
     th_ps = []
     instance_id = np.random.choice(np.array(range(1,num_objects+1))) if self.random_instance else None
@@ -201,6 +202,7 @@ class DAVIS(data.Dataset):
       pad_masks = np.pad(raw_mask, ((lh, uh), (lw, uw)), mode='constant')
       pad_mask_void = np.pad(mask_void, ((lh, uh), (lw, uw)), mode='constant')
       pad_proposals = np.pad(proposals, ((lh, uh), (lw, uw)), mode='constant')
+      pad_raw_proposals = np.pad(raw_proposals, ((lh, uh), (lw, uw)), mode='constant')
       pad_frames = np.pad(raw_frame, ((lh, uh), (lw, uw), (0, 0)), mode='constant')
       info['pad'] = ((lh, uh), (lw, uw))
 
@@ -208,6 +210,7 @@ class DAVIS(data.Dataset):
       th_masks.append(pad_masks[np.newaxis, np.newaxis])
       th_mask_void.append(pad_mask_void[np.newaxis, np.newaxis])
       th_proposals.append(pad_proposals[np.newaxis, np.newaxis])
+      th_raw_proposals.append(pad_raw_proposals[np.newaxis, np.newaxis])
       # th_pc.append(proposal_categories[np.newaxis])
       # th_ps.append(proposal_scores[np.newaxis])
 
@@ -222,8 +225,8 @@ class DAVIS(data.Dataset):
     #Can be used for setting proposals if desired, but for now it isn't neccessary and will be ignored
     proposals = np.concatenate(th_proposals, axis=1)
     return {'images': np.concatenate(th_frames, axis=1), 'masks_guidance':masks_guidance, 'info': info,
-            'target': target, "proposals": target, "raw_proposals": raw_proposals,
-            'raw_masks': np.concatenate(th_masks_raw, axis=1)}
+            'target': target, "proposals": proposals,
+            "raw_proposals": np.concatenate(th_raw_proposals, axis=1), 'raw_masks': np.concatenate(th_masks_raw, axis=1)}
 
   def get_current_sequence(self, img_file):
     sequence = img_file.split("/")[-2]

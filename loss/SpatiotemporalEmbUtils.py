@@ -122,12 +122,12 @@ class Visualizer:
 class Cluster:
   def __init__(self, ):
     # coordinate map
-    x = torch.linspace(0, 2, 960).view(
-      1, 1, 1, -1).expand(1, 32, 480, 960)
+    x = torch.linspace(0, 2.4, 1152).view(
+      1, 1, 1, -1).expand(1, 32, 480, 1152)
     y = torch.linspace(0, 1, 480).view(
-      1, 1, -1, 1).expand(1, 32, 480, 960)
+      1, 1, -1, 1).expand(1, 32, 480, 1152)
     t = torch.linspace(0, 0.1, 32).view(
-      1, -1, 1, 1).expand(1, 32, 480, 960)
+      1, -1, 1, 1).expand(1, 32, 480, 1152)
     xyzm = torch.cat((t, y, x), 0)
 
     # coordinate map

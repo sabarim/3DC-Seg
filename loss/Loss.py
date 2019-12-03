@@ -96,6 +96,13 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
       iou_meter.update(iou_all_instances.avg)
       # loss_mask = 0
 
+    if 'multi_class' in args.losses:
+      assert pred_mask.shape[1] > 2 and 'sem_seg' in target_extra
+      criterion_multi = torch.nn.CrossEntropyLoss(reduce=False)
+      loss_multi = criterion_multi(pred_mask[:, :args.n_classes-1], target_extra['sem_seg'].cuda().long().squeeze(1))
+      loss_mask+=bootstrapped_ce_loss(loss_multi)
+
+
   # print("loss_extra {}".format(loss_extra))
   loss = loss_mask + loss_extra
 

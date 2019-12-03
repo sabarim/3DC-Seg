@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import numpy as np
-from network.Modules import Refine3dDG
+from network.Modules import Refine3dDG, Refine3dConvTranspose
 from network.Resnet3d import resnet50, resnet50_no_ts
 from network.Resnet3dAgg import Encoder3d, Decoder3d, Resnet3dSimilarity, Encoder3d_csn_ir, Resnet3d
 from network.embedding_head import NonlocalOffsetEmbeddingHead
@@ -56,31 +56,12 @@ class DecoderSegmentEmbedding(DecoderWithEmbedding):
     return p, e, m2
 
 
-class DecoderEmbedding(DecoderWithEmbedding):
+class DecoderEmbedding(Decoder3d):
   def __init__(self,  n_classes=2, e_dim = 3, add_spatial_coord=True, scale=0.5):
-    super(DecoderEmbedding, self).__init__( n_classes=n_classes, e_dim = e_dim, add_spatial_coord=add_spatial_coord)
-    self.convG1 = nn.Conv3d(2048, 1024, kernel_size=3, padding=1)
-    self.convG2 = nn.Conv3d(1024, 256, kernel_size=3, padding=1)
-    self.scale = scale
-    # self.RF4 = Refine3dDG(1024, 256)
-    # self.RF3 = Refine3dDG(512, 256)
-    #self.fp16Refinement()
-
-  def fp16Refinement(self):
-    for layer in self.modules():
-      if isinstance(layer, Refine3dDG):
-        layer.half()
-
-  def forward(self, r5, r4, r3, r2, support):
-    x = self.convG1(r5)
-    x = self.convG2(F.relu(x))
-    m4 = self.RF4(r4, F.relu(x))
-    m3 = self.RF3(r3, m4)
-    m2 = self.RF2(r2, m3)
-    scale = (1, self.scale, self.scale)
-    e = self.embedding_head(F.interpolate(F.relu(m2), scale_factor=scale, mode='trilinear'))
-
-    return e
+    super(DecoderEmbedding, self).__init__( n_classes=n_classes)
+    self.RF4 = Refine3dConvTranspose(1024, 256)
+    self.RF3 = Refine3dConvTranspose(512, 256)
+    self.RF2 = Refine3dConvTranspose(256, 256)
 
 
 # Multi scale decoder
@@ -104,10 +85,10 @@ class MultiScaleDecoder(Decoder3d):
 
 
 class Resnet3dEmbeddingNetwork(Resnet3dSimilarity):
-  def __init__(self, tw=8, sample_size=112, e_dim=7):
+  def __init__(self, tw=8, sample_size=112, e_dim=7, n_classes=2):
     super(Resnet3dEmbeddingNetwork, self).__init__()
     self.encoder = Encoder3d(tw, sample_size)
-    self.decoder = DecoderWithEmbedding(e_dim=e_dim)
+    self.decoder = DecoderWithEmbedding(n_classes=n_classes, e_dim=e_dim)
 
 
 class Resnet3dSegmentEmbedding(Resnet3dSimilarity):
@@ -130,7 +111,7 @@ class Resnet3dEmbeddingMultiDecoder(Resnet3d):
     super(Resnet3dEmbeddingMultiDecoder, self).__init__(tw=tw, sample_size=sample_size)
     resnet = resnet50_no_ts(sample_size=sample_size, sample_duration=tw)
     self.encoder = Encoder3d(tw, sample_size, resnet=resnet)
-    decoders = [Decoder3d(), DecoderEmbedding(e_dim=e_dim, add_spatial_coord=False)] if decoders is None else decoders
+    decoders = [Decoder3d(), DecoderEmbedding(n_classes=e_dim)] if decoders is None else decoders
     self.decoders = nn.ModuleList()
     for decoder in decoders:
       self.decoders.append(decoder)
@@ -143,11 +124,10 @@ class Resnet3dEmbeddingMultiDecoder(Resnet3d):
 
 
 class Resnet3dChannelSeparated_ir(Resnet3dEmbeddingMultiDecoder):
-  def __init__(self, tw=16, sample_size = 112, e_dim=7):
+  def __init__(self, tw=16, sample_size = 112, e_dim=7, n_classes=2):
     super(Resnet3dChannelSeparated_ir, self).__init__( decoders =
-                                                       [Decoder3d(),
-                                                        DecoderEmbedding(e_dim=e_dim, add_spatial_coord=False,
-                                                                         scale=0.5)
+                                                       [Decoder3d(n_classes=n_classes),
+                                                        DecoderEmbedding(n_classes=e_dim)
                                                         ])
     self.encoder = Encoder3d_csn_ir(tw, sample_size)
 
