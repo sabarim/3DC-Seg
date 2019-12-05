@@ -7,7 +7,6 @@ import numpy as np
 from PIL import Image
 from torch.utils import data
 
-from datasets.utils.OclussionAug import load_occluders
 from util import create_object_id_mapping
 from util import top_n_predictions_maskrcnn, filter_by_category
 from utils.Resize import ResizeMode, resize
@@ -48,7 +47,7 @@ class DAVIS(data.Dataset):
     self.min_h = min([h for (h, w) in self.shape.values()])
     print("Max image width {} : Max image height {}\n"
           "Min image width: {} MIN Image height: {}".format(self.max_w, self.max_h, self.min_w, self.min_h))
-    self.occluders = load_occluders(PASCAL_VOC_PATH)
+    # self.occluders = load_occluders(PASCAL_VOC_PATH)
 
   def set_paths(self, imset, resolution, root):
     self.mask_dir = os.path.join(root, 'Annotations_unsupervised', resolution)
