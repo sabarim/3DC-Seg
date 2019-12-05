@@ -140,6 +140,11 @@ def get_dataset(args):
     testset = YoutubeVOSDataset(YOUTUBEVOS_ROOT, imset='valid', is_train=False,
                                  random_instance=args.random_instance, crop_size=args.crop_size,
                                  resize_mode=args.resize_mode, temporal_window=args.tw, num_classes=args.n_classes)
+  elif args.test_dataset == "youtube_vis":
+    from datasets.YoutubeVIS import YoutubeVISDataset
+    testset = YoutubeVISDataset(YOUTUBEVIS_ROOT, imset='valid', is_train=False,
+                                 random_instance=False, crop_size=args.crop_size,
+                                 resize_mode=args.resize_mode, temporal_window=args.tw, num_classes=args.n_classes)
 
   if 'infer' in args.task:
     if 'davis_proposal_guidance' in args.test_dataset:

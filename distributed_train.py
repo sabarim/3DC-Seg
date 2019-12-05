@@ -15,7 +15,7 @@ from inference_handlers.inference import infer
 from network.RGMP import Encoder
 from utils.Argparser import parse_args
 # Constants
-from utils.AverageMeter import AverageMeter
+from utils.AverageMeter import AverageMeter, AverageMeterDict
 from utils.Constants import DAVIS_ROOT, network_models
 from utils.Saver import load_weights, save_checkpoint
 from utils.dataset import get_dataset
@@ -37,7 +37,7 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
   data_time = AverageMeter()
   losses = AverageMeter()
   ious = AverageMeter()
-  losses_extra = AverageMeter()
+  losses_extra = AverageMeterDict()
   ious_extra = AverageMeter()
 
   # switch to train mode
@@ -65,17 +65,18 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
     # Average loss and accuracy across processes for logging
     if torch.cuda.device_count() > 1:
       reduced_loss = reduce_tensor(loss.data, args)
-      reduced_loss_extra = reduce_tensor(loss_extra.data, args)
+      reduced_loss_extra = dict([(key, reduce_tensor(val.data, args).item()) for key, val in loss_extra.items()])
       reduced_iou = reduce_tensor(iou, args)
     else:
       reduced_loss = loss.data
-      reduced_iou = iou.data
-      reduced_loss_extra = loss_extra.data
+      reduced_loss_extra = dict([(key, val.data.item()) for key, val in loss_extra.items()])
+      reduced_iou = iou
+      # reduced_loss_extra = loss_extra.data
 
     # to_python_float incurs a host<->device sync
     # FIXME: may device count is not the right parameter to use here
     losses.update(reduced_loss.item(), args.world_size)
-    losses_extra.update(reduced_loss_extra.item(), args.world_size)
+    losses_extra.update(reduced_loss_extra, args.world_size)
     ious.update(reduced_iou.item(), args.world_size)
 
     foo.add_scalar("data/loss", losses.val, count)
@@ -95,7 +96,7 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
       print('Epoch: [{0}][{1}/{2}]\t'
             'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
             'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-            'Loss Extra {loss_extra.val:.4f}({loss_extra.avg:.4f})\t'
+            'Loss Extra {loss_extra}\t'
             'IOU {iou.val:.4f} ({iou.avg:.4f})\t'
             'IOU Extra {iou_extra.val:.4f} ({iou_extra.avg:.4f})\t'.format(
         epoch, i*args.world_size*args.bs, len(trainloader) * args.bs*args.world_size,
@@ -105,7 +106,7 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
         loss_extra=losses_extra, iou_extra=ious_extra), flush=True)
 
   if args.local_rank == 0:
-    print('Finished Train Epoch {} Loss {losses.avg:.5f} Loss Extra {losses_extra.avg: .5f} IOU {iou.avg: .2f} '
+    print('Finished Train Epoch {} Loss {losses.avg:.5f} Loss Extra {losses_extra.avg} IOU {iou.avg: .2f} '
           'IOU Extra {iou_extra.avg: .2f}'.
           format(epoch, losses=losses, losses_extra=losses_extra, iou=ious, iou_extra=ious_extra), flush=True)
   return losses.avg, ious.avg
@@ -116,7 +117,7 @@ def validate(dataset, model, criterion, epoch, foo):
   count=0
   batch_time = AverageMeter()
   losses = AverageMeter()
-  losses_extra = AverageMeter()
+  losses_extra = AverageMeterDict()
   ious = AverageMeter()
   ious_extra = AverageMeter()
 
@@ -142,17 +143,17 @@ def validate(dataset, model, criterion, epoch, foo):
         # Average loss and accuracy across processes for logging
         if torch.cuda.device_count() > 1:
           reduced_loss = reduce_tensor(loss.data, args)
-          reduced_loss_extra = reduce_tensor(loss_extra.data, args)
+          reduced_loss_extra = dict([(key, reduce_tensor(val.data.item(), args).item()) for key, val in loss_extra.items()])
           reduced_iou = reduce_tensor(iou, args)
         else:
           reduced_loss = loss.data
-          reduced_loss_extra = loss_extra.data
+          reduced_loss_extra = dict([(key, val.data.item()) for key, val in loss_extra.items()])
           reduced_iou = iou.data
 
         # to_python_float incurs a host<->device sync
         # FIXME: may device count is not the right parameter to use here
         losses.update(reduced_loss.item(), args.world_size)
-        losses_extra.update(reduced_loss_extra.item(), args.world_size)
+        losses_extra.update(reduced_loss_extra, args.world_size)
         ious_video.update(reduced_iou.item(), args.world_size)
 
         foo.add_scalar("data/loss", losses.val, count)
@@ -171,7 +172,7 @@ def validate(dataset, model, criterion, epoch, foo):
           print('Test: [{0}][{1}/{2}]\t'
                 'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                 'Loss {loss.val:.4f} ({loss.avg:.5f})\t'
-                'Loss Extra {loss_extra.val:.4f} ({loss_extra.avg:.5f})\t'
+                'Loss Extra {loss_extra}\t'
                 'IOU {iou.val:.4f} ({iou.avg:.5f})\t'
                 'IOU Extra {iou_extra.val:.4f} ({iou_extra.avg:.5f})\t'.format(
             input_dict['info']['name'], i*args.world_size, len(testloader)*args.world_size,

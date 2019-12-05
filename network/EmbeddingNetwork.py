@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 import numpy as np
-from network.Modules import Refine3dDG, Refine3dConvTranspose
+from network.Modules import Refine3dDG, Refine3dConvTranspose, Refine3dLight
 from network.Resnet3d import resnet50, resnet50_no_ts
 from network.Resnet3dAgg import Encoder3d, Decoder3d, Resnet3dSimilarity, Encoder3d_csn_ir, Resnet3d
 from network.embedding_head import NonlocalOffsetEmbeddingHead
@@ -62,6 +62,14 @@ class DecoderEmbedding(Decoder3d):
     self.RF4 = Refine3dConvTranspose(1024, 256)
     self.RF3 = Refine3dConvTranspose(512, 256)
     self.RF2 = Refine3dConvTranspose(256, 256)
+
+
+class DecoderLight(Decoder3d):
+  def __init__(self, n_classes=2, conv_t = False):
+    super(DecoderLight, self).__init__(n_classes=n_classes)
+    self.RF4 = Refine3dLight(1024, 256, conv_t=conv_t)
+    self.RF3 = Refine3dLight(512, 256, conv_t=conv_t)
+    self.RF2 = Refine3dLight(256, 256, conv_t=conv_t)
 
 
 # Multi scale decoder
@@ -137,6 +145,15 @@ class Resnet3dCSNiRSameDecoders(Resnet3dEmbeddingMultiDecoder):
     super(Resnet3dCSNiRSameDecoders, self).__init__(decoders=
                                                       [Decoder3d(),
                                                        Decoder3d(n_classes=e_dim)
+                                                       ])
+    self.encoder = Encoder3d_csn_ir(tw, sample_size)
+
+
+class Resnet3dCSNiRLight(Resnet3dEmbeddingMultiDecoder):
+  def __init__(self, tw=16, sample_size = 112, e_dim=7):
+    super(Resnet3dCSNiRLight, self).__init__(decoders=
+                                                      [DecoderLight(),
+                                                       DecoderLight(n_classes=e_dim, conv_t=True)
                                                        ])
     self.encoder = Encoder3d_csn_ir(tw, sample_size)
 

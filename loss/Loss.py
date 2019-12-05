@@ -17,23 +17,26 @@ def bootstrapped_ce_loss(raw_ce, n_valid_pixels_per_im=None, fraction=0.25):
 
 
 def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=None):
-  pred_mask = pred[0]
+  pred_seg = pred[0]
+  pred_mask = None
   pred_extra = pred[1] if len(pred) > 1 else None
   loss_mask = 0
-  loss_image = torch.zeros_like(pred_mask[:, -1])
+  loss_image = torch.zeros_like(pred_seg[:, -1])
   if "ce" in args.losses:
-    if len(pred_mask.shape) > 4:
-      pred_mask = F.interpolate(pred_mask, target.shape[2:], mode="trilinear")
+    if len(pred_seg.shape) > 4:
+      pred_mask = F.interpolate(pred_seg, target.shape[2:], mode="trilinear")
     else:
-      pred_mask = F.interpolate(pred_mask, target.shape[2:], mode="bilinear")
+      pred_mask = F.interpolate(pred_seg, target.shape[2:], mode="bilinear")
 
     if isinstance(criterion, torch.nn.CrossEntropyLoss):
       loss_image = criterion(pred_mask, target.squeeze(1).cuda().long())
     else:
+      # For binary segmentation use just the first and the last channel
+      pred_mask = torch.stack((pred_mask[:, 0], pred_mask[:, -1]), dim=1)
       loss_image = criterion(pred_mask[:, -1], target.squeeze(1).cuda().float())
     loss_mask = bootstrapped_ce_loss(loss_image)
 
-  loss_extra = torch.tensor(0).cuda().float()
+  loss_extra = {}
   if pred_extra is not None:
     # estimate loss for pixel level similarity
     if 'similarity' in args.losses:
@@ -68,11 +71,12 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
       # compute loss
       criterion_extra = torch.nn.CrossEntropyLoss(reduce=False)
       similarity_target = target_extra['similarity_raw_mask'].squeeze(1).cuda().long()
-      loss_extra = criterion_extra(y, similarity_target)
-      loss_extra = bootstrapped_ce_loss(loss_extra)
+      loss_similarity = criterion_extra(y, similarity_target)
+      loss_extra['similarity'] = bootstrapped_ce_loss(loss_similarity)
     if "embedding" in args.losses:
       pred_extra = F.interpolate(pred_extra, scale_factor=(1,8,8), mode='trilinear')
-      loss_extra, _, _ = compute_embedding_loss(pred_extra, target_extra['similarity_ref'].cuda(), args.config_path)
+      loss_embedding, _, _ = compute_embedding_loss(pred_extra, target_extra['similarity_ref'].cuda(), args.config_path)
+      loss_extra['embedding'] = loss_embedding
     elif "spatiotemporal_embedding" in args.losses:
       iou_all_instances = AverageMeter()
       pred_extra = F.interpolate(pred_extra, size=target.shape[-3:], mode='trilinear')
@@ -80,7 +84,7 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
       # pred_spatemb = torch.cat((pred_extra.cuda(), pred_mask[:, -1:]), dim=1)
       pred_spatemb = pred_extra
       criterion_extra = SpatioTemporalEmbLoss(n_sigma=args.embedding_dim - 4)
-      loss_extra = criterion_extra(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
+      loss_extra['spatiotemporal_embedding'] = criterion_extra(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
                                          labels=None, iou=True, iou_meter=iou_all_instances)
       iou_meter.update(iou_all_instances.avg)
       # loss_mask = 0
@@ -91,19 +95,22 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
       # pred_spatemb = torch.cat((pred_extra.cuda(), pred_mask[:, -1:]), dim=1)
       pred_spatemb = pred_extra
       criterion_extra = SpatialEmbLoss(n_sigma=args.embedding_dim - 4)
-      loss_extra = criterion_extra(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
+      loss_extra['spatial_embedding'] = criterion_extra(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
                                          labels=None, iou=True, iou_meter=iou_all_instances)
       iou_meter.update(iou_all_instances.avg)
       # loss_mask = 0
 
     if 'multi_class' in args.losses:
-      assert pred_mask.shape[1] > 2 and 'sem_seg' in target_extra
+      assert pred_seg.shape[1] > 2 and 'sem_seg' in target_extra
       criterion_multi = torch.nn.CrossEntropyLoss(reduce=False)
-      loss_multi = criterion_multi(pred_mask[:, :args.n_classes-1], target_extra['sem_seg'].cuda().long().squeeze(1))
-      loss_mask+=bootstrapped_ce_loss(loss_multi)
+      loss_multi = criterion_multi(pred_seg[:, :args.n_classes-1], target_extra['sem_seg'].cuda().long().squeeze(1))
+      loss_multi = bootstrapped_ce_loss(loss_multi)
+      loss_mask += loss_multi
+      loss_extra['loss_multi'] = loss_multi
+
 
 
   # print("loss_extra {}".format(loss_extra))
-  loss = loss_mask + loss_extra
+  loss = loss_mask + sum(loss_extra.values())
 
   return loss, loss_image, pred_mask, loss_extra

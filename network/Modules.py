@@ -77,6 +77,32 @@ class Refine3dConvTranspose(nn.Module):
     return m
 
 
+class Refine3dLight(Refine3d):
+  def __init__(self, inplanes, planes, scale_factor=2, conv_t = False):
+    super(Refine3dLight, self).__init__(inplanes, planes, scale_factor)
+    self.convFS1 = nn.Conv3d(inplanes, planes, kernel_size=(1,1,1), padding=0)
+    self.convFS2 = nn.Conv3d(planes, planes, kernel_size=(1,3,3), padding=(0,1,1))
+    self.convFS3 = nn.Conv3d(planes, planes, kernel_size=(3,1,1), padding=(1,0,0))
+    self.convMM1 = nn.Conv3d(planes, planes, kernel_size=(1,3,3), padding=(0,1,1))
+    self.convMM2 = nn.Conv3d(planes, planes, kernel_size=(3,1,1), padding=(1,0,0))
+    # Use transpose conv to upsample the feature maps
+    self.conv_t = nn.ConvTranspose3d(planes, planes, 2, stride=2, bias=True) if conv_t else None
+    self.scale_factor = scale_factor
+
+  def forward(self, f, pm):
+    s = self.convFS1(f)
+    sr = self.convFS2(F.relu(s))
+    sr = self.convFS3(F.relu(sr))
+    s = s + sr
+
+    m = s + F.interpolate(pm, size=s.shape[-3:], mode='trilinear') if self.conv_t is None \
+      else s + F.relu(self.conv_t(pm))
+
+    mr = self.convMM1(F.relu(m))
+    mr = self.convMM2(F.relu(mr))
+    m = m + mr
+    return m
+
 class UpsamplerBlock(nn.Module):
   def __init__(self, in_channels, out_channels):
     super().__init__()

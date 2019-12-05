@@ -13,7 +13,7 @@ from inference_handlers.inference import infer
 from network.RGMP import Encoder
 from utils.Argparser import parse_args
 # Constants
-from utils.AverageMeter import AverageMeter
+from utils.AverageMeter import AverageMeter, AverageMeterDict
 from utils.Constants import DAVIS_ROOT, network_models
 from utils.Saver import load_weights, save_checkpoint
 from utils.dataset import get_dataset
@@ -29,7 +29,7 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
   data_time = AverageMeter()
   losses = AverageMeter()
   ious = AverageMeter()
-  losses_extra = AverageMeter()
+  losses_extra = AverageMeterDict()
   ious_extra = AverageMeter()
 
   # switch to train mode
@@ -40,7 +40,7 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
     iou, loss, loss_image, output, loss_extra = forward(args, criterion, input_dict,
                                                         model, ious_extra=ious_extra)
     losses.update(loss.cpu().item(), 1)
-    losses_extra.update(loss_extra.cpu().item(), 1)
+    losses_extra.update(dict([(key,val.cpu().item()) for key, val in loss_extra.items()]), 1)
     foo.add_scalar("data/loss", loss, count)
     foo.add_scalar("data/iou", iou, count)
     if args.show_image_summary:
@@ -66,13 +66,14 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
           'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
           'Data {data_time.val:.3f} ({data_time.avg:.3f})\t'
           'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
-          'Loss Extra {loss_extra.val:.4f}({loss_extra.avg:.4f})\t'
+          'Loss Extra {loss_extra:}\t'
           'IOU {iou.val:.4f} ({iou.avg:.4f})\t'
           'IOU Extra {iou_extra.val:.4f} ({iou_extra.avg:.4f})\t'.format(
       epoch, i * args.bs, len(train_loader) * args.bs, batch_time=batch_time,
       data_time=data_time, loss=losses, iou=ious, loss_extra=losses_extra, iou_extra=ious_extra), flush=True)
 
-  print('Finished Train Epoch {} Loss {losses.avg:.5f} Loss Extra {losses_extra.avg: .5f} IOU {iou.avg: .5f}'.format(epoch, losses=losses, losses_extra=losses_extra, iou=ious), flush=True)
+  print('Finished Train Epoch {} Loss {losses.avg:.5f} Loss Extra {losses_extra.avg: .5f} IOU {iou.avg: .5f}'.
+        format(epoch, losses=losses, losses_extra=losses_extra, iou=ious), flush=True)
   return losses.avg, ious.avg
 
 
@@ -80,7 +81,7 @@ def validate(val_loader, model, criterion, epoch, foo):
   batch_time = AverageMeter()
   losses = AverageMeter()
   ious = AverageMeter()
-  losses_extra = AverageMeter()
+  losses_extra = AverageMeterDict()
   ious_extra = AverageMeter()
 
   # switch to evaluate mode
@@ -98,7 +99,8 @@ def validate(val_loader, model, criterion, epoch, foo):
                                                             model, ious_extra=ious_extra)
         ious_video.update(iou.item())
         losses.update(loss.item(), 1)
-        losses_extra.update(loss_extra.item(), 1)
+        losses_extra.update(dict([(key, val.item()) for key, val in loss_extra.items()]),
+                            1)
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
@@ -111,7 +113,7 @@ def validate(val_loader, model, criterion, epoch, foo):
         print('Test: [{0}][{1}/{2}]\t'
               'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
               'Loss {loss.val:.4f} ({loss.avg:.5f})\t'
-              'Loss Extra {loss_extra.val:.4f} ({loss_extra.avg:.5f})\t'
+              'Loss Extra {loss_extra}\t'
               'IOU {iou.val:.4f} ({iou.avg:.5f})\t'
               'IOU Extra{iou_extra.val:.4f} ({iou_extra.avg:.5f})\t'.format(
           input_dict['info']['name'], i, len(val_loader), batch_time=batch_time, loss=losses, iou=ious_video,
