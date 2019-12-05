@@ -5,14 +5,11 @@ import torch
 from PIL import Image
 from scipy.misc import imresize
 from torch.nn import functional as F
-
 # cluster module
 from torch.utils.data import DataLoader
 
-from inference_handlers.infer_utils.CentreStitching import stitch_centres
 from inference_handlers.infer_utils.LinearTubeStitching import stitch_clips_best_overlap
 from inference_handlers.infer_utils.StitchWithGT import stitch_with_gt
-from loss.Loss import compute_loss
 from loss.SpatiotemporalEmbUtils import Cluster, Visualizer
 from network.NetworkUtil import run_forward
 from utils.AverageMeter import AverageMeter
@@ -20,7 +17,7 @@ from utils.Constants import DAVIS_ROOT
 
 cluster = Cluster()
 # number of overlapping frames for stitching
-OVERLAPS = 0
+OVERLAPS = 3
 
 
 def infer_spatial_emb(dataset, model, criterion, writer, args, distributed=False):
@@ -31,17 +28,15 @@ def infer_spatial_emb(dataset, model, criterion, writer, args, distributed=False
   palette = Image.open(DAVIS_ROOT + '/Annotations_unsupervised/480p/bear/00000.png').getpalette()
 
   for seq in dataset.get_video_ids():
-  # for seq in ['blackswan']:
+  # for seq in ['shooting', 'soapbox']:
     ious_per_video = AverageMeter()
     dataset.set_video_id(seq)
     test_sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=False) if distributed else None
     dataloader = DataLoader(dataset, batch_size=1, num_workers=1, shuffle=False, sampler=test_sampler, pin_memory=True)
 
-    last_predictions = None
     stitched_instance_map = None
     all_instance_pred = None
     all_semantic_pred = None
-    pred_mask_overlap = None
     for iter, input_dict in enumerate(dataloader):
       if not args.exhaustive and (iter % (args.tw - OVERLAPS)) != 0:
         continue
@@ -57,9 +52,6 @@ def infer_spatial_emb(dataset, model, criterion, writer, args, distributed=False
       input, input_var, loss, pred, pred_extra = forward(criterion, input_dict, ious, model, args)
       losses.update(loss)
       pred_mask = F.softmax(pred, dim=1)
-      #if pred_mask_overlap  is not None:
-      #  pred_mask[:, -1, :OVERLAPS] = (pred_mask[:, -1, :OVERLAPS] + pred_mask_overlap.cuda()) / 2
-      #pred_mask_overlap = pred_mask[:, -1, (pred_mask.shape[2] - OVERLAPS):].data
       seed_map = torch.argmax(pred_mask, dim=1).float() * pred_mask[:, -1]
       if args.embedding_dim - 4 == 3:
         seed_map = torch.argmax(pred_mask, dim=1).float() * pred_extra[:, -1]
@@ -70,22 +62,25 @@ def infer_spatial_emb(dataset, model, criterion, writer, args, distributed=False
       instance_map, predictions = cluster.cluster(pred_spatemb[0], threshold=0.5, n_sigma=3,
                                                   iou_meter = ious_per_video, in_mask=instances_one_hot.data.cpu())
 
+      clip_frames = info['support_indices'][0].data.cpu().numpy()
+      if args.save_per_clip and pred_extra is not None:
+        save_per_clip(iter, instance_map=instance_map, e= None, info=info,
+                      results_path=os.path.join('results', args.network_name,'per_clip'), palette=palette)
+
       assert batch_size == 1
       if args.stitch == 'gt':
         stitched_instance_map = stitch_with_gt(instance_map, instances_one_hot)
+        all_instance_pred[clip_frames] = stitched_instance_map.data.int().cpu()
+        all_semantic_pred[clip_frames] = torch.argmax(pred_mask, dim=1).data.cpu().int()[0]
       elif stitched_instance_map is not None:
         stitched_instance_map = stitch_clips_best_overlap(stitched_instance_map, instance_map.data.cpu(), OVERLAPS)
-      # if last_predictions is not None:
-      #   stitched_instance_map, last_predictions = stitch_centres(ref_predictions=last_predictions,
-      #                                                            curr_predictions=predictions,
-      #                                                            tube_shape=instance_map.shape)
-      #   all_instance_pred[info['support_indices'][0][OVERLAPS:]] = stitched_instance_map[OVERLAPS:].int()
-      #   all_semantic_pred[info['support_indices'][0][OVERLAPS:]] = torch.argmax(pred_mask, dim=1).data.cpu().int()[0][OVERLAPS:]
+        all_instance_pred[clip_frames[OVERLAPS:]] = stitched_instance_map.data.int().cpu()[OVERLAPS:].int()
+        all_semantic_pred[clip_frames[OVERLAPS:]] = torch.argmax(pred_mask, dim=1).data.cpu().int()[0][OVERLAPS:]
       else:
         stitched_instance_map = instance_map.data.cpu()
         last_predictions = predictions
-      all_instance_pred[info['support_indices'][0]] = stitched_instance_map.data.int().cpu()
-      all_semantic_pred[info['support_indices'][0]] = torch.argmax(pred_mask, dim=1).data.cpu().int()[0]
+        all_instance_pred[clip_frames] = stitched_instance_map.data.int().cpu()
+        all_semantic_pred[clip_frames] = torch.argmax(pred_mask, dim=1).data.cpu().int()[0]
       # for i in range(input_dict['images'].shape[2]):
       #   visualise(input_dict, instance_map, target, pred_spatemb, i, args, iter)
         # save_results(input_dict['images'], predictions, info, args, i, iter)
@@ -170,5 +165,32 @@ def save_results(pred, info, results_path, palette):
     if not os.path.exists(results_path):
       os.makedirs(results_path)
     img_M.save(os.path.join(results_path, '{:05d}.png'.format(f)))
+
+
+def save_per_clip(iter, instance_map, e, info, results_path, palette):
+  results_path = os.path.join(results_path, info['name'][0])
+  e_path = os.path.join(results_path, 'embeddings')
+  if not os.path.exists(results_path) and instance_map is not None:
+    os.makedirs(results_path)
+  if not os.path.exists(e_path) and e is not None:
+    os.makedirs(e_path)
+
+  (lh, uh), (lw, uw) = info['pad']
+
+  if e is not None:
+    e = e[:, :, :, lh[0]:-uh[0], lw[0]:-uw[0]]
+    save_dict = {"embeddings": e, 'frames': info['support_indices'][0].data.cpu()}
+    with open(os.path.join(e_path, 'clip_{:05d}_{:05d}.pickle'.format(iter, iter + 7)), 'wb') as f:
+      np.pickle.dump(save_dict, f)
+
+  if instance_map is not None:
+    for f in range(len(instance_map)):
+      h, w = instance_map.shape[-2:]
+      M = instance_map[f, lh[0]:h - uh[0], lw[0]:w - uw[0]]
+      img_M = Image.fromarray(imresize(M, info['shape'], interp='nearest'))
+      img_M.putpalette(palette)
+      if not os.path.exists(results_path):
+        os.makedirs(results_path)
+      img_M.save(os.path.join(results_path,  'clip_{:05d}_{:05d}_frame_{:05d}.png'.format(iter, iter + 7, f)))
 
 

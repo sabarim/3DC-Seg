@@ -5,24 +5,26 @@ from sklearn.metrics import confusion_matrix
 from torch import __init__
 
 
-
 def get_best_overlap(ref_tube, curr_tube):
-  THRESH = 0.3
-  num_obj_curr = len(curr_tube.unique())
-  num_obj_ref = len(ref_tube.unique())
+  THRESH = 0.7
+  num_obj_curr = curr_tube.max()
+  num_obj_ref = ref_tube.max()
   ref_tube = ref_tube.data.cpu().numpy()
   curr_tube = curr_tube.data.cpu().numpy()
   conf_matrix = confusion_matrix(curr_tube.reshape(-1), ref_tube.reshape(-1))[1:, 1:]
   I = conf_matrix
-  U = conf_matrix.sum(axis=0)  + conf_matrix.sum(axis=1) - np.diag(conf_matrix)
-  iou = np.nan_to_num(I / U[None])
+  U = conf_matrix.sum(axis=0)  + conf_matrix.sum(axis=1)[:, None] - np.diag(conf_matrix)
+  iou = np.nan_to_num(I / U)
   cost = 1-iou
-  cost = cost[:, :num_obj_ref-1]
+  cost = cost[:, :num_obj_ref]
   # filter background
   # compute linear assignment for foreground objects
   row_ind, col_ind = linear_sum_assignment(cost)
-  # row_ind[cost[row_ind, col_ind] > THRESH] = -1
-  unassigned_objects = np.setdiff1d(np.arange(num_obj_curr - 1), np.array(row_ind))
+
+  ids_to_delete = np.where(cost[row_ind, col_ind] > THRESH)
+  row_ind = np.delete(row_ind, ids_to_delete)
+  col_ind = np.delete(col_ind, ids_to_delete)
+  unassigned_objects = np.setdiff1d(np.arange(curr_tube.max()), np.array(row_ind))
 
   for obj_id in unassigned_objects:
     row_ind= np.append(row_ind, [obj_id])
@@ -34,6 +36,34 @@ def get_best_overlap(ref_tube, curr_tube):
       ref_id = np.max(col_ind) + 1
     col_ind = np.append(col_ind, [ref_id])
   # col_ind[cost[row_ind, col_ind] > THRESH] = -1
+  return row_ind + 1, col_ind + 1
+
+
+def get_best_overlap_iou(ref_tube, curr_tube):
+  THRESH = 0.7
+  num_obj_curr = curr_tube.max()
+  num_obj_ref = ref_tube.max()
+  ref_tube = ref_tube.data.cpu().numpy()
+  curr_tube = curr_tube.data.cpu().numpy()
+  conf_matrix = confusion_matrix(curr_tube.reshape(-1), ref_tube.reshape(-1))[1:, 1:]
+  I = conf_matrix
+  U = conf_matrix.sum(axis=0)  + conf_matrix.sum(axis=1) - np.diag(conf_matrix)
+  iou = np.nan_to_num(I / U[None])
+  cost = 1-iou
+  cost = cost[:, :num_obj_ref]
+  iou = iou[:num_obj_curr, :num_obj_ref]
+  col_ind = np.argmax(iou, axis=1)
+  row_ind = np.arange(len(col_ind))
+  selected_ious = np.max(iou, axis=1)
+
+  # Assign new ids for objects with low overlap
+  n_objects_unassigned = np.sum(selected_ious < THRESH)
+  available_ids = np.setdiff1d(row_ind, col_ind)
+  new_ids_count = n_objects_unassigned - len(available_ids)
+  if(new_ids_count > 0):
+    available_ids = np.append(available_ids, np.arange(num_obj_ref, num_obj_ref + new_ids_count))
+  available_ids.sort()
+  col_ind[selected_ious < THRESH] = available_ids[:n_objects_unassigned]
   return row_ind + 1, col_ind + 1
 
 
@@ -54,12 +84,14 @@ def get_overlapping_proposals(ref_tube, curr_tube, overlaps):
   stitched_tube = torch.zeros_like(curr_tube).int()
 
   for curr_idx, ref_idx in zip(curr_ids, target_ids):
-    if ref_idx >= len(obj_ids_ref) and ref_idx < len(obj_ids_curr):
-      stitched_tube[curr_tube.int() == obj_ids_curr[curr_idx]] = torch.tensor(obj_ids_curr[ref_idx]).int()
-    elif ref_idx >= len(obj_ids_ref):
-      stitched_tube[curr_tube.int() == obj_ids_curr[curr_idx]] = torch.tensor(ref_idx).int()
-    elif curr_idx<len(obj_ids_curr):
-      stitched_tube[curr_tube.int() == obj_ids_curr[curr_idx]] = torch.tensor(obj_ids_ref[ref_idx]).int()
+    stitched_tube[curr_tube == curr_idx] = torch.tensor(ref_idx, dtype=torch.int)
+    # if ref_idx >= len(obj_ids_ref) and ref_idx < len(obj_ids_curr):
+    #   stitched_tube[curr_tube.int() == obj_ids_curr[curr_idx]] = torch.tensor(obj_ids_curr[ref_idx]).int()
+    # if ref_idx >= len(obj_ids_ref):
+    #   stitched_tube[curr_tube.int() == obj_ids_curr[curr_idx]] = torch.tensor(ref_idx).int()
+    # elif curr_idx<len(obj_ids_curr):
+    # else:
+    #   stitched_tube[curr_tube.int() == obj_ids_curr[curr_idx]] = torch.tensor(obj_ids_ref[ref_idx]).int()
 
 
   # for idx in range(len(obj_ids_ref)):
