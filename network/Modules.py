@@ -81,8 +81,12 @@ class Refine3dLight(Refine3d):
   def __init__(self, inplanes, planes, scale_factor=2, conv_t = False):
     super(Refine3dLight, self).__init__(inplanes, planes, scale_factor)
     self.convFS1 = nn.Conv3d(inplanes, planes, kernel_size=(1,1,1), padding=0)
-    self.convFS2 = nn.Conv3d(planes, planes, kernel_size=(1,3,3), padding=(0,1,1))
-    self.convFS3 = nn.Conv3d(planes, planes, kernel_size=(3,1,1), padding=(1,0,0))
+    self.convFS2 = nn.Conv3d(planes, planes, kernel_size=(1, 3, 3), padding=(0, 1, 1))
+    self.convFS3 = nn.Conv3d(planes, planes, kernel_size=(3, 1, 1), padding=(1, 0, 0))
+    self.convFS4 = nn.Conv3d(planes, planes, kernel_size=(1,3,3), padding=(0,1,1))
+    self.convFS5 = nn.Conv3d(planes, planes, kernel_size=(3,1,1), padding=(1,0,0))
+    self.convFS6 = nn.Conv3d(inplanes, planes, kernel_size=(1, 1, 1), padding=0)
+
     self.convMM1 = nn.Conv3d(planes, planes, kernel_size=(1,3,3), padding=(0,1,1))
     self.convMM2 = nn.Conv3d(planes, planes, kernel_size=(3,1,1), padding=(1,0,0))
     # Use transpose conv to upsample the feature maps
@@ -91,9 +95,11 @@ class Refine3dLight(Refine3d):
 
   def forward(self, f, pm):
     s = self.convFS1(f)
-    sr = self.convFS2(F.relu(s))
+    sr = self.convFS2(s)
     sr = self.convFS3(F.relu(sr))
-    s = s + sr
+    sr = self.convFS4(F.relu(sr))
+    sr = self.convFS5(F.relu(sr))
+    s = self.convFS6(f) + sr
 
     m = s + F.interpolate(pm, size=s.shape[-3:], mode='trilinear') if self.conv_t is None \
       else s + F.relu(self.conv_t(pm))

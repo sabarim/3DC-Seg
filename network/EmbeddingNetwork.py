@@ -72,6 +72,28 @@ class DecoderLight(Decoder3d):
     self.RF2 = Refine3dLight(256, 256, conv_t=conv_t)
 
 
+class DecoderMultiClass(Decoder3d):
+  def __init__(self, n_classes=2, conv_t=False):
+    super(DecoderMultiClass, self).__init__(n_classes=n_classes)
+    self.pred_fg = nn.Conv3d(256, 2, kernel_size=3, padding=1, stride=1)
+
+  def forward(self, r5, r4, r3, r2, support):
+    x = self.GC(r5)
+    r = self.convG1(F.relu(x))
+    r = self.convG2(F.relu(r))
+    m5 = x + r  # out: 1/32, 64
+    m4 = self.RF4(r4, m5)  # out: 1/16, 64
+    m3 = self.RF3(r3, m4)  # out: 1/8, 64
+    m2 = self.RF2(r2, m3)  # out: 1/4, 64
+
+    p2 = self.pred2(F.relu(m2))
+    p_fg = self.pred_fg(F.relu(m2))
+    p = torch.cat((p2, p_fg[:, -1:]), dim=1)
+    p = F.interpolate(p, scale_factor=(1, 4, 4), mode='trilinear')
+
+    return p
+
+
 # Multi scale decoder
 class MultiScaleDecoder(Decoder3d):
   def __init__(self, n_classes=2, add_spatial_coord = True):
@@ -132,11 +154,9 @@ class Resnet3dEmbeddingMultiDecoder(Resnet3d):
 
 
 class Resnet3dChannelSeparated_ir(Resnet3dEmbeddingMultiDecoder):
-  def __init__(self, tw=16, sample_size = 112, e_dim=7, n_classes=2):
-    super(Resnet3dChannelSeparated_ir, self).__init__( decoders =
-                                                       [Decoder3d(n_classes=n_classes),
-                                                        DecoderEmbedding(n_classes=e_dim)
-                                                        ])
+  def __init__(self, tw=16, sample_size = 112, e_dim=7, n_classes=2, decoders=None):
+    decoders = [Decoder3d(n_classes=n_classes), DecoderEmbedding(n_classes=e_dim)] if decoders is None else decoders
+    super(Resnet3dChannelSeparated_ir, self).__init__( decoders =decoders)
     self.encoder = Encoder3d_csn_ir(tw, sample_size)
 
 
@@ -171,6 +191,8 @@ class Resnet3dCSNiRMultiScale(Resnet3d):
     return p
 
 
-class Resnet3dCSNiRMultiScaleNoCoord(Resnet3dCSNiRMultiScale):
-  def __init__(self):
-    super(Resnet3dCSNiRMultiScaleNoCoord, self).__init__(add_spatial_coord=False)
+class Resnet3dCSNiRMultiClass(Resnet3dChannelSeparated_ir):
+  def __init__(self, tw=16, sample_size = 112, e_dim=7, n_classes=2):
+    super(Resnet3dCSNiRMultiClass, self).__init__(tw=tw, sample_size=sample_size, e_dim=e_dim, n_classes=n_classes,
+                                                  decoders=[DecoderMultiClass(n_classes=n_classes),
+                                                            DecoderEmbedding(n_classes=e_dim)])

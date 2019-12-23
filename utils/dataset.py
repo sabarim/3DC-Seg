@@ -1,4 +1,4 @@
-from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT, YOUTUBEVIS_ROOT
+from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT, YOUTUBEVIS_ROOT, MAPILLARY_ROOT
 
 
 def get_dataset(args):
@@ -67,29 +67,39 @@ def get_dataset(args):
                                        max_temporal_gap=12, temporal_window=args.tw, augmentors=args.augmentors,
                                        proposal_dir=args.proposal_dir)
   elif args.train_dataset == "coco":
-    from datasets.static.COCO import COCODataset
+    from datasets.coco.COCO import COCODataset
     trainset = COCODataset(COCO_ROOT, is_train=True, crop_size=args.crop_size,
                                  resize_mode=args.resize_mode, temporal_window=args.tw)
   elif args.train_dataset == "coco_instance":
-    from datasets.static.COCO import COCOInstanceDataset
+    from datasets.coco.COCO import COCOInstanceDataset
     trainset = COCOInstanceDataset(COCO_ROOT, is_train=True, crop_size=args.crop_size,
                            resize_mode=args.resize_mode, temporal_window=args.tw)
   elif args.train_dataset == "coco_embedding":
-    from datasets.static.COCO import COCOEmbeddingDataset
+    from datasets.coco.COCO import COCOEmbeddingDataset
     trainset = COCOEmbeddingDataset(COCO_ROOT, is_train=True, crop_size=args.crop_size,
                            resize_mode=args.resize_mode, temporal_window=args.tw)
+  elif args.train_dataset == "mapillary":
+    from datasets.mapillary.MapillaryInstance import MapillaryVideoDataset
+    trainset = MapillaryVideoDataset(MAPILLARY_ROOT, is_train=True, crop_size=args.crop_size,
+                                 resize_mode=args.resize_mode, temporal_window=args.tw, min_size=args.min_size)
+
+  # Validation dataset
   if args.test_dataset == "coco":
-    from datasets.static.COCO import COCODataset
+    from datasets.coco.COCO import COCODataset
     testset = COCODataset(COCO_ROOT, is_train=False, crop_size=args.crop_size,
                           resize_mode=args.resize_mode, temporal_window=args.tw)
   elif args.test_dataset == "coco_instance":
-    from datasets.static.COCO import COCOInstanceDataset
+    from datasets.coco.COCO import COCOInstanceDataset
     testset = COCOInstanceDataset(COCO_ROOT, is_train=False, crop_size=args.crop_size,
                           resize_mode=args.resize_mode, temporal_window=args.tw)
   elif args.test_dataset == "coco_embedding":
-    from datasets.static.COCO import COCOEmbeddingDataset
+    from datasets.coco.COCO import COCOEmbeddingDataset
     testset = COCOEmbeddingDataset(COCO_ROOT, is_train=False, crop_size=args.crop_size,
                                   resize_mode=args.resize_mode, temporal_window=args.tw)
+  elif args.test_dataset == "mapillary":
+    from datasets.mapillary.MapillaryInstance import MapillaryVideoDataset
+    testset = MapillaryVideoDataset(MAPILLARY_ROOT, is_train=False, crop_size=args.crop_size_eval,
+                                 resize_mode=args.resize_mode_eval, temporal_window=args.tw, min_size=args.min_size)
   elif 'davis_proposal_guidance' in args.test_dataset:
     from datasets.DAVISProposalGuidance import DAVISProposalGuidanceEval
     testset = DAVISProposalGuidanceEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=args.random_instance,
@@ -99,10 +109,6 @@ def get_dataset(args):
     from datasets.DAVIS16 import DAVIS16PredictOneEval
     testset = DAVIS16PredictOneEval(DAVIS_ROOT, crop_size=args.crop_size_eval,
                                     resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir)
-  # elif "davis16_centre" in args.test_dataset:
-  #   testset = DAVIS16PredictOneEval(DAVIS_ROOT, crop_size=args.crop_size_eval,
-  #                                   resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir,
-  #                                   predict_centre = True)
   elif "davis16" in args.test_dataset:
     from datasets.DAVIS16 import DAVIS16Eval
     testset = DAVIS16Eval(DAVIS_ROOT, crop_size=args.crop_size_eval, random_instance=args.random_instance,

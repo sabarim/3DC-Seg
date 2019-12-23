@@ -1,6 +1,17 @@
 import argparse
 
 
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def parse_args():
   """
   Parse input arguments
@@ -66,6 +77,9 @@ def parse_args():
   parser.add_argument('--tw', dest='tw',
                       help='temporal window size',
                       default=5, type=int)
+  parser.add_argument('--min_size', dest='min_size',
+                      help='minimum object size (currently used only for mapillary)',
+                      default=0, type=int)
   parser.add_argument('--max_temporal_gap', dest='max_temporal_gap',
                       help='maximum temporal gap relative to current frame from which the input clip should be sampled',
                       default=5, type=int)
@@ -154,6 +168,8 @@ def parse_args():
   # embedding
   parser.add_argument('--embedding_dim', dest='embedding_dim',
                       help='embedding dimension', default=64, type=int)
+  parser.add_argument('--coordinate_centre', dest='coordinate_centre',
+                      help='Use spatial coordinate centre instead of the embedding mean', default=True, type=str2bool)
 
   # config file for parameters
   parser.add_argument('--config_path', dest='config_path',
