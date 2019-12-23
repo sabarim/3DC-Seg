@@ -8,6 +8,7 @@ from scipy.misc import imresize
 
 from datasets.DAVIS import DAVIS
 from util import get_one_hot_vectors
+from utils.Constants import YOUTUBEVIS_ROOT, YOUTUBEVOS_ROOT
 from utils.Resize import ResizeMode, resize
 
 
@@ -105,17 +106,6 @@ class YoutubeVOSDataset(DAVIS):
     support_indices = np.random.choice(sample_list, min(self.temporal_window, len(sample_list)), replace=False)
     support_indices = np.sort(np.append(support_indices, np.repeat([index],
                                                                    self.temporal_window - len(support_indices))))
-
-    # if len(sample_list) == 0:
-    #   support_indices = np.repeat([index], self.temporal_window + 2)
-    # elif (len(sample_list) - (self.temporal_window + 2)) < 0:
-    #   support_indices = np.repeat([index], abs(len(sample_list) - (self.temporal_window + 2)))
-    #   support_indices = np.append(support_indices, sample_list[-1])
-    #   support_indices = np.append(support_indices, sample_list[:-1])
-    # else:
-    #   support_indices = np.random.choice(np.array(sample_list)[:-1], self.temporal_window, replace=False)
-    #   support_indices = np.append(support_indices, np.array([index, sample_list[-1]]))
-
     support_indices.sort()
     # print("support indices are {}".format(support_indices))
     return support_indices.astype(np.int)
@@ -151,3 +141,7 @@ class YoutubeVOSEmbedding(YoutubeVOSDataset):
 
     return input_dict
 
+
+if __name__ == '__main__':
+    dataset = YoutubeVOSDataset(YOUTUBEVOS_ROOT, is_train=True)
+    dataset.__getitem__(10)

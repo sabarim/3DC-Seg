@@ -8,15 +8,13 @@ from imgaug import augmenters as iaa
 from torch.utils.data import Dataset
 
 # from datasets.Loader import register_dataset
+from datasets.utils.Util import generate_clip_from_image
 from util import get_one_hot_vectors
+from utils.Constants import COCO_ROOT
 from utils.Resize import ResizeMode, resize
 
 COCO_DEFAULT_PATH = "/globalwork/mahadevan/mywork/data/coco/"
 NAME = "COCO"
-TRANSLATION = 0.1
-SHEAR = 0.05
-ROTATION = 15
-FLIP = 40
 
 
 # @register_dataset(NAME)
@@ -38,10 +36,16 @@ class COCODataset(Dataset):
       self.filter_crowd_images = False
       self.min_box_size = -1.0
 
-    self.restricted_image_category_list = ['person','bicycle','car','motorcycle','airplane','bus','train','truck','boat','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe','frisbee','skis','snowboard','sports ball','kite','baseball bat','skateboard','surfboard','tennis racket']
+    self.restricted_image_category_list = ['person','bicycle','car','motorcycle','airplane','bus','train','truck',
+                                           'boat','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra',
+                                           'giraffe','frisbee','skis','snowboard','sports ball','kite','baseball bat',
+                                           'skateboard','surfboard','tennis racket']
     if len(self.restricted_image_category_list) == 0:
       self.restricted_image_category_list = None
-    self.restricted_annotations_category_list = ['person','bicycle','car','motorcycle','airplane','bus','train','truck','boat','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra','giraffe','frisbee','skis','snowboard','sports ball','kite','baseball bat','skateboard','surfboard','tennis racket']
+    self.restricted_annotations_category_list = ['person','bicycle','car','motorcycle','airplane','bus','train','truck',
+                                                 'boat','bird','cat','dog','horse','sheep','cow','elephant','bear',
+                                                 'zebra','giraffe','frisbee','skis','snowboard','sports ball','kite',
+                                                 'baseball bat','skateboard','surfboard','tennis racket']
     if len(self.restricted_annotations_category_list) == 0:
       self.restricted_annotations_category_list = None
 
@@ -158,10 +162,6 @@ class COCODataset(Dataset):
     
     raw_frames = self.load_image(self.inputfile_lists[index])
     raw_masks = self.load_annotation(self.inputfile_lists[index])
-    # raw_masks = (raw_masks == instance_id).astype(np.uint8) if instance_id is not None else raw_masks
-    #num_proposals, raw_proposals, proposal_mask = self.read_proposals(video, f, raw_masks)
-    # if self.is_train:
-    #   [raw_frames, raw_masks] = do_occ_aug(self.occluders, [raw_frames, raw_masks])
     tensors_resized = resize({"image":raw_frames, "mask":raw_masks[:, :, 0]}, self.resize_mode, self.crop_size)
     return tensors_resized["image"], tensors_resized["mask"]
 
@@ -172,39 +172,7 @@ class COCODataset(Dataset):
     return imgs
 
   def generate_clip(self, raw_frame, raw_mask):
-    clip_frames = np.repeat(raw_frame[np.newaxis], self.temporal_window, axis=0)
-    clip_masks = np.repeat(raw_mask[np.newaxis], self.temporal_window, axis=0)
-    # Sometimes(0.5, ...) applies the given augmenter in 50% of all cases,
-    # e.g. Sometimes(0.5, GaussianBlur(0.3)) would blur roughly every second
-    # image.
-    sometimes = lambda aug: iaa.Sometimes(0.2, aug)
-    blur = sometimes(iaa.OneOf([
-                  iaa.GaussianBlur((0.0, 0.5)),
-                  # iaa.AverageBlur(k=(2, 7)),
-                  # iaa.MedianBlur(k=(3, 11)),
-                ]))
-    seq = iaa.Sequential([
-      #iaa.Fliplr(FLIP / 100.),  # horizontal flips
-      sometimes(iaa.ElasticTransformation(alpha=(200, 220), sigma=(17.0, 19.0))),
-      iaa.Affine(
-        scale={"x": (0.8, 1.2), "y": (0.8, 1.2)},
-        translate_percent={"x": (-TRANSLATION, TRANSLATION), "y": (-TRANSLATION, TRANSLATION)},
-        rotate=(-ROTATION, ROTATION),
-        shear=(-SHEAR, SHEAR),
-        mode='reflect'
-      )
-    ], random_order=True)
-
-    frame_aug = raw_frame[np.newaxis]
-    mask_aug = raw_mask[np.newaxis]
-    # create sequence of transformations of the current image
-    for t in range(self.temporal_window-1):
-      frame_aug, mask_aug = seq(images=frame_aug.astype(np.uint8), segmentation_maps=mask_aug)
-      frame_aug = blur(images=frame_aug)
-      clip_frames[t + 1] = frame_aug[0]
-      clip_masks[t + 1] = mask_aug[0]
-    # clip_frames, clip_masks = seq(images=clip_frames.astype(np.uint8), segmentation_maps=clip_masks)
-
+    clip_frames, clip_masks = generate_clip_from_image(raw_frame, raw_mask, self.temporal_window)
     return clip_frames / 255.0, clip_masks
 
   def set_video_id(self, video):
@@ -327,3 +295,8 @@ class COCOEmbeddingDataset(COCODataset):
     input_dict['target'] = (input_dict['target'] != 0).astype(np.uint8)
 
     return input_dict
+
+
+if __name__ == '__main__':
+    dataset = COCOEmbeddingDataset(COCO_ROOT, is_train=True, crop_size=[406, 726], resize_mode=ResizeMode.RESIZE_SHORT_EDGE_AND_CROP)
+    dataset.__getitem__(10)
