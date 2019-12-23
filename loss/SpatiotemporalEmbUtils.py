@@ -14,6 +14,7 @@ from PIL import Image
 
 import torch
 
+from loss.LossUtils import parse_embedding_output, precision_tensor_to_matrix, mahalanobis_distance
 from loss.SpatialEmbLoss import calculate_iou
 from util import get_best_overlap
 
@@ -122,12 +123,12 @@ class Visualizer:
 class Cluster:
   def __init__(self, ):
     # coordinate map
-    x = torch.linspace(0, 2.4, 1152).view(
-      1, 1, 1, -1).expand(1, 32, 480, 1152)
-    y = torch.linspace(0, 1, 480).view(
-      1, 1, -1, 1).expand(1, 32, 480, 1152)
+    x = torch.linspace(0, 4.16, 2000).view(
+      1, 1, 1, -1).expand(1, 32, 800, 2000)
+    y = torch.linspace(0, 1.6, 800).view(
+      1, 1, -1, 1).expand(1, 32, 800, 2000)
     t = torch.linspace(0, 0.1, 32).view(
-      1, -1, 1, 1).expand(1, 32, 480, 1152)
+      1, -1, 1, 1).expand(1, 32, 800, 2000)
     xyzm = torch.cat((t, y, x), 0)
 
     # coordinate map
@@ -171,7 +172,11 @@ class Cluster:
 
     return instance_map
 
-  def cluster(self, prediction, n_sigma=1, threshold=0.5, iou_meter = None, in_mask = None):
+  def cluster(self, prediction, n_sigma=1, threshold=0.5, iou_meter=None, in_mask=None):
+    return self.cluster_with_mahalanobis(prediction, n_sigma, threshold, iou_meter, in_mask) if n_sigma >3 else \
+      self.cluster_squared(prediction, n_sigma, threshold, iou_meter, in_mask)
+
+  def cluster_squared(self, prediction, n_sigma=1, threshold=0.5, iou_meter = None, in_mask = None):
 
     time, height, width = prediction.size(-3), prediction.size(-2), prediction.size(-1)
     xyzm_s = self.xyzm[:, 0:time, 0:height, 0:width]
@@ -241,6 +246,84 @@ class Cluster:
         iou_meter.update(np.nan_to_num(np.mean(list(used_ids.values()))))
 
     return instance_map, instances
+
+  def cluster_with_mahalanobis(self, prediction, n_sigma=1, threshold=0.5, iou_meter=None, in_mask=None):
+
+    time, height, width = prediction.size(-3), prediction.size(-2), prediction.size(-1)
+    xyzm_s = self.xyzm[:, 0:time, 0:height, 0:width]
+    embedding_size = 3
+
+    spatial_emb = torch.tanh(prediction[0:3]).cuda() + xyzm_s.cuda()  # 3 x t x h x w
+    sigma = prediction[3:3 + n_sigma].cuda()  # n_sigma x t x h x w
+    # seed_map = torch.sigmoid(prediction[3 + n_sigma:3 + n_sigma + 1])  # 1 x t x h x w
+    seed_map = prediction[3 + n_sigma:3 + n_sigma + 1].cuda()  # 1 x t x h x w
+
+    instance_map = torch.zeros(time, height, width).byte()
+    instances = []
+
+    count = 1
+    # mask = seed_map > 0.5
+    mask = seed_map.bool()
+    if mask.sum() > 128*time:
+      spatial_emb_masked = spatial_emb[mask.expand_as(spatial_emb)].view(3, -1)
+      sigma_masked = sigma[mask.expand_as(sigma)].view(n_sigma, -1)
+      seed_map_masked = seed_map[mask].view(1, -1)
+
+      unclustered = torch.ones(mask.sum()).byte().cuda()
+      instance_map_masked = torch.zeros(mask.sum()).byte().cuda()
+
+      # track used masks for computing iou
+      used_ids = {}
+      while (unclustered.sum() > 128*time):
+        seed = (seed_map_masked * unclustered.float()).argmax().item()
+        seed_score = (seed_map_masked * unclustered.float()).max().item()
+        if seed_score < threshold:
+          break
+        center = spatial_emb_masked[:, seed:seed + 1].permute(1,0)
+        unclustered[seed] = 0
+
+        # calculate the precision matrix at seed point
+        precision_vals = parse_embedding_output(sigma_masked[:, seed : seed + 1].permute(1, 0), embedding_size)
+        precision_mat = precision_tensor_to_matrix(precision_vals, embedding_size, compute_mean=False)
+        assert precision_mat.shape[-2:] == (embedding_size, embedding_size)
+        dist = torch.exp(-1 * mahalanobis_distance(spatial_emb_masked.permute(1, 0),
+                                                   center=center, precision_mat=precision_mat,
+                                                   return_squared_distance=True))
+        # dist = dist.reshape(in_mask.shape[1:]).unsqueeze(0)
+
+        proposal = (dist > 0.5).squeeze()
+
+        if proposal.sum() > 128*time:
+          if unclustered[proposal].sum().float() / proposal.sum().float() > 0.5:
+            instance_map_masked[proposal.squeeze()] = count
+            instance_mask = torch.zeros(time, height, width).int()
+            instance_mask[mask.squeeze().cpu()] = proposal.int().cpu()
+            instances.append(
+              {'mask': instance_mask.squeeze(), 'score': seed_score, 'centre': center})
+            count += 1
+            # calculate instance iou
+            if iou_meter is not None and in_mask.shape[1] > 0:
+              iou, id = get_best_overlap(instance_mask.numpy(),
+                               in_mask.squeeze().data.cpu().numpy())
+              if id not in used_ids.keys():
+                used_ids[id] = calculate_iou(instance_mask.squeeze(), in_mask[id])
+              elif iou > used_ids[id]:
+                used_ids[id] = calculate_iou(instance_mask.squeeze(), in_mask[id])
+              elif -1:
+                iou_meter.update(0)
+            elif in_mask.shape[1] == 0:
+              iou_meter.update(0)
+
+        unclustered[proposal] = 0
+
+      instance_map[mask.squeeze().cpu()] = instance_map_masked.cpu()
+      if in_mask.shape[1] == 0 and len(instances == 0):
+        iou_meter.update(1)
+      else:
+        iou_meter.update(np.nan_to_num(np.mean(list(used_ids.values()))))
+
+    return instance_map, instances
+
 
 
 class Logger:
