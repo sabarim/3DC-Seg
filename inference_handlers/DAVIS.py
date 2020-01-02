@@ -7,6 +7,7 @@ from PIL import Image
 from scipy.misc import imresize
 from torch import nn
 from torch.nn import functional as F
+from torch.utils.data import DataLoader
 
 from loss.Loss import bootstrapped_ce_loss
 from network.NetworkUtil import run_forward
@@ -28,10 +29,12 @@ def infer_DAVIS(dataloader, model, criterion, writer, args):
 
   end = time.time()
   iter = 0
-  palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
+  palette = Image.open(DAVIS_ROOT + '/Annotations_unsupervised/480p/bear/00000.png').getpalette()
   for seq in dataloader.dataset.get_video_ids():
   # for seq in ['goat']:
-    dataloader.dataset.set_video_id(seq)
+    dataset.set_video_id(seq)
+    test_sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=False) if distributed else None
+    dataloader = DataLoader(dataset, batch_size=1, num_workers=1, shuffle=False, sampler=test_sampler, pin_memory=True)
     ious_video = AverageMeter()
     all_preds = None
     obj_categories = []
@@ -40,9 +43,9 @@ def infer_DAVIS(dataloader, model, criterion, writer, args):
         info = input_dict['info']
         if all_preds is None:
           all_preds = torch.zeros((info['num_frames'], info['num_objects'],) +
-                                  (tuple(input_dict['masks_guidance'].shape[-2:],)))
+                                  (tuple(input_dict['target'].shape[-2:],)))
           all_targets = torch.zeros((info['num_frames'],1,) +
-                                  (tuple(input_dict['masks_guidance'].shape[-2:], )))
+                                  (tuple(input_dict['target'].shape[-2:], )))
           object_mapping = create_object_id_mapping(input_dict['target'][0,0].data.cpu().numpy(),
                                                     get_one_hot_vectors(input_dict['proposals'][0, 0, 0].data.cpu().numpy()))
           # obj_cats = input_dict['raw_proposals']['labels'][0][list(object_mapping.values())]

@@ -168,9 +168,9 @@ def overlay_predicitons(image, predictions):
 
 
 def write_output_mask(proposals, path):
-    result_mask = np.zeros(list(proposals['masks'].shape[2:]))
-    for i in range(len(proposals['masks'])):
-        result_mask[proposals['masks'][i,0].data.cpu().numpy() == 1] = proposals['track_ids'][i] + 1
+    result_mask = np.zeros(list(proposals['mask'].shape[2:]))
+    for i in range(len(proposals['mask'])):
+        result_mask[proposals['mask'][i,0].data.cpu().numpy() == 1] = proposals['track_ids'][i] + 1
     save_mask(result_mask, path)
 
 

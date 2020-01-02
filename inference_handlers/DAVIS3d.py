@@ -22,7 +22,7 @@ def infer_DAVIS3d(dataloader, model, criterion, writer, args):
   # switch to evaluate mode
   model.eval()
   end = time.time()
-  palette = Image.open(DAVIS_ROOT + '/Annotations/480p/bear/00000.png').getpalette()
+  palette = Image.open(DAVIS_ROOT + '/Annotations_unsupervised/480p/bear/00000.png').getpalette()
   for seq in dataloader.dataset.get_video_ids():
   # for seq in ['horsejump-high']:
     dataloader.dataset.set_video_id(seq)

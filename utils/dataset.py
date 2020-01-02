@@ -82,6 +82,10 @@ def get_dataset(args):
     from datasets.mapillary.MapillaryInstance import MapillaryVideoDataset
     trainset = MapillaryVideoDataset(MAPILLARY_ROOT, is_train=True, crop_size=args.crop_size,
                                  resize_mode=args.resize_mode, temporal_window=args.tw, min_size=args.min_size)
+  elif args.train_dataset == "coco_mapillary":
+    from datasets.mapillary.COCOMapillary import COCOMapillary
+    trainset = COCOMapillary(is_train=True, crop_size=args.crop_size,
+                             resize_mode=args.resize_mode, temporal_window=args.tw, min_size=args.min_size)
 
   # Validation dataset
   if args.test_dataset == "coco":

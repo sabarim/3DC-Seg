@@ -15,6 +15,8 @@ from utils.Resize import ResizeMode, resize
 
 COCO_DEFAULT_PATH = "/globalwork/mahadevan/mywork/data/coco/"
 NAME = "COCO"
+COCO_SUPERCATEGORIES = ["outdoor", "food", "indoor", "appliance", "sports", "person", "animal",
+                        "vehicle", "furniture", "accessory", "electronic", "kitchen"]
 
 
 # @register_dataset(NAME)
@@ -38,14 +40,16 @@ class COCODataset(Dataset):
 
     self.restricted_image_category_list = ['person','bicycle','car','motorcycle','airplane','bus','train','truck',
                                            'boat','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra',
-                                           'giraffe','frisbee','skis','snowboard','sports ball','kite','baseball bat',
-                                           'skateboard','surfboard','tennis racket']
+                                           'giraffe','backpack', 'handbag', 'suitcase','frisbee','skis','snowboard',
+                                           'sports ball','kite','baseball bat', 'baseball glove', 'skateboard',
+                                           'surfboard','tennis racket', 'remote', 'cell phone']
     if len(self.restricted_image_category_list) == 0:
       self.restricted_image_category_list = None
     self.restricted_annotations_category_list = ['person','bicycle','car','motorcycle','airplane','bus','train','truck',
-                                                 'boat','bird','cat','dog','horse','sheep','cow','elephant','bear',
-                                                 'zebra','giraffe','frisbee','skis','snowboard','sports ball','kite',
-                                                 'baseball bat','skateboard','surfboard','tennis racket']
+                                           'boat','bird','cat','dog','horse','sheep','cow','elephant','bear','zebra',
+                                           'giraffe','backpack', 'handbag', 'suitcase','frisbee','skis','snowboard',
+                                           'sports ball','kite','baseball bat', 'baseball glove', 'skateboard',
+                                           'surfboard','tennis racket', 'remote', 'cell phone']
     if len(self.restricted_annotations_category_list) == 0:
       self.restricted_annotations_category_list = None
 
@@ -199,8 +203,8 @@ class COCODataset(Dataset):
 
     # padding size to be divide by 32
     _,_, h, w = raw_masks.shape
-    new_h = h + 32 - h % 32
-    new_w = w + 32 - w % 32
+    new_h = h + 32 - h % 32 if h % 32 > 0 else h
+    new_w = w + 32 - w % 32 if w % 32 > 0 else w
     # print(new_h, new_w)
     lh, uh = (new_h - h) / 2, (new_h - h) / 2 + (new_h - h) % 2
     lw, uw = (new_w - w) / 2, (new_w - w) / 2 + (new_w - w) % 2
@@ -209,7 +213,7 @@ class COCODataset(Dataset):
     pad_frames = np.pad(raw_frames, ((0, 0),(0, 0),(lh, uh), (lw, uw)), mode='constant')
     info['pad'] = ((lh, uh), (lw, uw))
 
-    return {'images': pad_frames, 'info': info,
+    return {'images': pad_frames.astype(np.float32), 'info': info,
             'target': pad_masks, "proposals": pad_masks, "raw_proposals": pad_masks,
             'raw_masks': pad_masks}
 
@@ -285,12 +289,24 @@ class COCOEmbeddingDataset(COCODataset):
 
     return label.astype(np.uint8)
 
+  def create_sem_seg_from_instances(self, img_filename, instances_masks):
+    anns = self.filename_to_anns[img_filename.split("/")[-1]]
+    label = np.zeros_like(instances_masks)
+    for ann in anns:
+      instance_id = (anns.index(ann) + 1)
+      # use super category id for semantic mask
+      supercategory = self.coco.loadCats([ann['category_id']])[0]['supercategory']
+      label[instances_masks == instance_id] = COCO_SUPERCATEGORIES.index(supercategory) + 1
+
+    return label.astype(np.uint8)
+
   def __getitem__(self, item):
     input_dict = super(COCOEmbeddingDataset, self).__getitem__(item)
-    one_hot_masks = [get_one_hot_vectors(input_dict['target'][0, i], self.num_classes)[:, np.newaxis, :, :]
-                     for i in range(len(input_dict['target'][0]))]
+    # one_hot_masks = [get_one_hot_vectors(input_dict['target'][0, i], self.num_classes)[:, np.newaxis, :, :]
+    #                  for i in range(len(input_dict['target'][0]))]
     # assert (len(np.unique(input_dict['target'][:, 1:])) - input_dict['info']['num_objects']) < 2
-    input_dict['target_extra'] = {#'similarity_ref': np.concatenate(one_hot_masks, axis=1).astype(np.uint8),
+    sem_seg_mask = self.create_sem_seg_from_instances(self.inputfile_lists[item], input_dict['target'])
+    input_dict['target_extra'] = {'sem_seg': sem_seg_mask,
                                   'similarity_raw_mask': input_dict['target']}
     input_dict['target'] = (input_dict['target'] != 0).astype(np.uint8)
 
@@ -299,4 +315,4 @@ class COCOEmbeddingDataset(COCODataset):
 
 if __name__ == '__main__':
     dataset = COCOEmbeddingDataset(COCO_ROOT, is_train=True, crop_size=[406, 726], resize_mode=ResizeMode.RESIZE_SHORT_EDGE_AND_CROP)
-    dataset.__getitem__(10)
+    dataset.__getitem__(100)

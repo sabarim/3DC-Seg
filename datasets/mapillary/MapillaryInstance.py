@@ -1,4 +1,6 @@
 import numpy as np
+
+from datasets.coco.COCO import COCO_SUPERCATEGORIES
 from datasets.mapillary.MapillaryBase import MapillaryBaseDataset
 from datasets.utils.Util import generate_clip_from_image
 from utils.Constants import MAPILLARY_ROOT
@@ -38,6 +40,14 @@ class MapillaryVideoDataset(MapillaryBaseDataset):
     crosswalk_zebra_id = [23]
     cat_ids_to_use = vehicle_ids + human_ids + animal_ids
 
+    vehicle_coco_mapping = COCO_SUPERCATEGORIES.index('vehicle') + 1
+    human_coco_mapping = COCO_SUPERCATEGORIES.index('person') + 1
+    animal_coco_mapping = COCO_SUPERCATEGORIES.index('animal') + 1
+    self.coco_cats_mapping = {}
+    self.coco_cats_mapping.update({key: vehicle_coco_mapping for key in vehicle_ids})
+    self.coco_cats_mapping.update({key: human_coco_mapping for key in human_ids})
+    self.coco_cats_mapping.update({key: animal_coco_mapping for key in animal_ids})
+
     super().__init__(default_path, is_train, 256, cat_ids_to_use, crop_size=crop_size, resize_mode=resize_mode,
                      min_size=min_size, name="datasets/Mapillary/")
 
@@ -51,6 +61,8 @@ class MapillaryVideoDataset(MapillaryBaseDataset):
   def get_instance_masks(self, raw_mask):
     ids = np.setdiff1d(np.unique(raw_mask), [0])
     cats = ids // self._id_divisor
+    # map category ids to coco supercategories
+    cats = np.array([self.coco_cats_mapping[cat] for cat in cats])
     masks_instances = np.zeros_like(raw_mask)
     for i in range(len(ids)):
       masks_instances[raw_mask == ids[i]] = i + 1
@@ -113,6 +125,7 @@ class MapillaryVideoDataset(MapillaryBaseDataset):
             'raw_masks': pad_masks,
             'target_extra': {'sem_seg': pad_masks_sem_seg,
                              'similarity_raw_mask': pad_masks_instances}}
+
 
 if __name__ == '__main__':
     dataset = MapillaryVideoDataset(MAPILLARY_ROOT, is_train=False, resolution='quarter', crop_size=[256, 448])

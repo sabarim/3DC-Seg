@@ -31,7 +31,7 @@ BEST_IOU=0
 torch.backends.cudnn.benchmark=True
 
 
-def train(train_loader, model, criterion, optimizer, epoch, foo):
+def train(train_loader, model, criterion, optimizer, epoch, summarywriter):
   global count
   batch_time = AverageMeter()
   data_time = AverageMeter()
@@ -45,8 +45,9 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
 
   end = time.time()
   for i, input_dict in enumerate(train_loader):
+    writer = None if args.show_image_summary else summarywriter
     iou, loss, loss_image, output, loss_extra = \
-      forward(args, criterion, input_dict, model, ious_extra=ious_extra)
+      forward(args, criterion, input_dict, model, ious_extra=ious_extra, summarywriter=writer)
 
     # compute gradient and do SGD step
     optimizer.zero_grad()
@@ -64,28 +65,28 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
 
     # Average loss and accuracy across processes for logging
     if torch.cuda.device_count() > 1:
-      reduced_loss = reduce_tensor(loss.data, args)
-      reduced_loss_extra = dict([(key, reduce_tensor(val.data, args).item()) for key, val in loss_extra.items()])
-      reduced_iou = reduce_tensor(iou, args)
+      reduced_loss = reduce_tensor(loss, args).data.item()
+      reduced_loss_extra = dict([(key, reduce_tensor(val, args).data.item()) for key, val in loss_extra.items()])
+      reduced_iou = reduce_tensor(iou, args).data.item()
     else:
-      reduced_loss = loss.data
+      reduced_loss = loss.data.item()
       reduced_loss_extra = dict([(key, val.data.item()) for key, val in loss_extra.items()])
-      reduced_iou = iou
+      reduced_iou = iou.data.item()
       # reduced_loss_extra = loss_extra.data
 
     # to_python_float incurs a host<->device sync
     # FIXME: may device count is not the right parameter to use here
-    losses.update(reduced_loss.item(), args.world_size)
+    losses.update(reduced_loss, args.world_size)
     losses_extra.update(reduced_loss_extra, args.world_size)
-    ious.update(reduced_iou.item(), args.world_size)
+    ious.update(reduced_iou, args.world_size)
 
-    foo.add_scalar("data/loss", losses.val, count)
-    foo.add_scalar("data/iou", ious.val, count)
+    summarywriter.add_scalar("data/loss", losses.val, count)
+    summarywriter.add_scalar("data/iou", ious.val, count)
     if args.show_image_summary:
       if "proposals" in input_dict:
-        foo.add_images("data/proposals", input_dict['proposals'][:, :, -1].repeat(1, 3, 1, 1), count)
+        summarywriter.add_images("data/proposals", input_dict['proposals'][:, :, -1].repeat(1, 3, 1, 1), count)
       masks_guidance = input_dict['masks_guidance'] if 'masks_guidance' in input_dict else None
-      show_image_summary(count, foo, input_dict['images'][0:1].float(), masks_guidance,
+      show_image_summary(count, summarywriter, input_dict['images'][0:1].float(), masks_guidance,
                          input_dict['target'][0:1], output[0:1])
 
     torch.cuda.synchronize()
@@ -143,11 +144,11 @@ def validate(dataset, model, criterion, epoch, foo):
         # Average loss and accuracy across processes for logging
         if torch.cuda.device_count() > 1:
           reduced_loss = reduce_tensor(loss.data, args)
-          reduced_loss_extra = dict([(key, reduce_tensor(val.data.item(), args).item()) for key, val in loss_extra.items()])
+          reduced_loss_extra = dict([(key, reduce_tensor(val, args).data.item()) for key, val in loss_extra.items()])
           reduced_iou = reduce_tensor(iou, args)
         else:
           reduced_loss = loss.data
-          reduced_loss_extra = dict([(key, val.data.item()) for key, val in loss_extra.items()])
+          reduced_loss_extra = dict([(key, val) for key, val in loss_extra.items()])
           reduced_iou = iou.data
 
         # to_python_float incurs a host<->device sync
@@ -239,13 +240,14 @@ if __name__ == '__main__':
       model = apex.parallel.DistributedDataParallel(model, delay_allreduce=True)
       args.world_size = torch.distributed.get_world_size()
 
+    # shuffle parameter does not seem to shuffle the data for distributed sampler
     train_sampler = torch.utils.data.distributed.DistributedSampler(
       torch.utils.data.RandomSampler(trainset, replacement=True, num_samples=args.data_sample),
       shuffle=True)
-    shuffle = True if args.data_sample is None else False
+    shuffle = True if train_sampler is None else False
 
     trainloader = DataLoader(trainset, batch_size=args.bs, num_workers=args.num_workers,
-                             sampler=train_sampler)
+                             shuffle=shuffle, sampler=train_sampler)
 
     # print(summary(model, tuple((256,256)), batch_size=1))
 
@@ -269,7 +271,8 @@ if __name__ == '__main__':
         for encoder in encoders:
           encoder.freeze_batchnorm()
       for epoch in range(start_epoch, args.num_epochs):
-        train_sampler.set_epoch(epoch)
+        if train_sampler is not None:
+          train_sampler.set_epoch(epoch)
         loss_mean, iou_mean  = train(trainloader, model, criterion, optimizer, epoch, writer)
         for lr_scheduler in lr_schedulers:
           lr_scheduler.step(epoch)

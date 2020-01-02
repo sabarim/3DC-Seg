@@ -24,11 +24,11 @@ def get_best_overlap(ref_tube, curr_tube):
   ids_to_delete = np.where(cost[row_ind, col_ind] > THRESH)
   row_ind = np.delete(row_ind, ids_to_delete)
   col_ind = np.delete(col_ind, ids_to_delete)
-  unassigned_objects = np.setdiff1d(np.arange(curr_tube.max()), np.array(row_ind))
+  unassigned_objects = np.setdiff1d(np.arange(curr_tube.max() - 1), np.array(row_ind))
 
   for obj_id in unassigned_objects:
     row_ind= np.append(row_ind, [obj_id])
-    if len(cost) > 0 and len(cost[obj_id]) < 0 and  np.min(cost[obj_id]) < THRESH:
+    if len(cost) > 0 and np.min(cost[obj_id]) < THRESH:
       ref_id = np.argmin(cost[obj_id])
     elif obj_id not in col_ind:
       ref_id = obj_id

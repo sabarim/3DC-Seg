@@ -126,7 +126,7 @@ class SpatioTemporalEmbLoss(nn.Module):
 
         loss = loss / (b+1)
 
-        return loss + prediction.sum()*0
+        return loss
 
 
 class CovarianceLoss(nn.Module):

@@ -88,8 +88,10 @@ class DecoderMultiClass(Decoder3d):
 
     p2 = self.pred2(F.relu(m2))
     p_fg = self.pred_fg(F.relu(m2))
+    p2 = F.interpolate(p2, scale_factor=(1, 4, 4), mode='trilinear')
+    p_fg = F.interpolate(p_fg, scale_factor=(1, 4, 4), mode='trilinear')
+    
     p = torch.cat((p2, p_fg[:, -1:]), dim=1)
-    p = F.interpolate(p, scale_factor=(1, 4, 4), mode='trilinear')
 
     return p
 
