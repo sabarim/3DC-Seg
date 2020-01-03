@@ -1,3 +1,5 @@
+from functools import reduce
+from operator import add
 import torch
 from torch import nn
 import numpy as np
@@ -86,12 +88,13 @@ class DecoderMultiClass(Decoder3d):
     m3 = self.RF3(r3, m4)  # out: 1/8, 64
     m2 = self.RF2(r2, m3)  # out: 1/4, 64
 
-    p2 = self.pred2(F.relu(m2))
+    p_multi = self.pred2(F.relu(m2))
     p_fg = self.pred_fg(F.relu(m2))
-    p2 = F.interpolate(p2, scale_factor=(1, 4, 4), mode='trilinear')
+    p_multi = F.interpolate(p_multi, scale_factor=(1, 4, 4), mode='trilinear')
     p_fg = F.interpolate(p_fg, scale_factor=(1, 4, 4), mode='trilinear')
     
-    p = torch.cat((p2, p_fg[:, -1:]), dim=1)
+    # p = torch.cat((p2, p_fg[:, -1:]), dim=1)
+    p = [p_fg, p_multi]
 
     return p
 
@@ -150,7 +153,8 @@ class Resnet3dEmbeddingMultiDecoder(Resnet3d):
 
   def forward(self, x, ref = None):
     r5, r4, r3, r2 = self.encoder.forward(x, ref)
-    p = [decoder.forward(r5, r4, r3, r2, None) for decoder in self.decoders]
+    flatten = lambda lst: [lst] if type(lst) is torch.Tensor else reduce(add, [flatten(ele) for ele in lst])
+    p = flatten([decoder.forward(r5, r4, r3, r2, None) for decoder in self.decoders])
     # e = self.decoder_embedding.forward(r5, r4, r3, r2, None)
     return p
 
