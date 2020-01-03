@@ -48,3 +48,8 @@ class font:
    UNDERLINE = '\033[4m'
    END = '\033[0m'
 
+
+PRED_SEM_SEG = 'sem_seg'
+PRED_EMBEDDING = 'embedding'
+PRED_LOGITS = 'logits'
+
