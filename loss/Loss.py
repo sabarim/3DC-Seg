@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import torch.nn.functional as F
-from loss.SpatialEmbLoss import SpatioTemporalEmbLoss, SpatialEmbLoss, CovarianceLoss
+from loss.SpatialEmbLoss import SpatioTemporalEmbLoss, SpatialEmbLoss, CovarianceLoss, SpatioTemporalLossWithFloatingCentre
 
 from loss.embedding_loss import compute_embedding_loss
 from utils.AverageMeter import AverageMeter
@@ -86,10 +86,10 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
       pred_emb = F.interpolate(pred[PRED_EMBEDDING], scale_factor=(1,8,8), mode='trilinear')
       loss_embedding, _, _ = compute_embedding_loss(pred_emb, target_extra['similarity_ref'].cuda(), args.config_path)
       loss_extra['embedding'] = loss_embedding
-    elif "spatiotemporal_embedding" in args.losses:
+    elif np.any(["spatiotemporal" in s for s in args.losses]):
       iou_all_instances = AverageMeter()
       pred_spatemb = F.interpolate(pred[PRED_EMBEDDING], size=target.shape[-3:], mode='trilinear')
-      criterion_extra = SpatioTemporalEmbLoss(n_sigma=args.embedding_dim - 4, to_center=args.coordinate_centre)
+      criterion_extra = SpatioTemporalEmbLoss(n_sigma=args.embedding_dim - 4, to_center=args.coordinate_centre) if "spatiotemporal_embedding" in args.losses else SpatioTemporalLossWithFloatingCentre(n_sigma=args.embedding_dim - 4, to_center=args.coordinate_centre)
       loss_extra['spatiotemporal_embedding'] = criterion_extra.forward(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
                                                                labels=None, iou=True, iou_meter=iou_all_instances,
                                                                w_var=10)
