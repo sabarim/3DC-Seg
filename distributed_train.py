@@ -180,7 +180,7 @@ def validate(dataset, model, criterion, epoch, foo):
                                         args.world_size * args.bs / batch_time.val,
                                         args.world_size * args.bs / batch_time.avg,
             batch_time=batch_time, loss=losses, iou=ious_video,
-            loss_extra=losses_extra, iou_extra=ious_extra),
+            loss_extra=losses_extra, iou_extra=ious_video_extra),
             flush=True)
     if args.local_rank == 0:
       print('Sequence {0}\t IOU {iou.avg} IOU Extra {iou_extra.avg}'.format(input_dict['info']['name'], iou=ious_video,
