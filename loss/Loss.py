@@ -1,10 +1,11 @@
 import torch
 import numpy as np
 import torch.nn.functional as F
-from loss.SpatialEmbLoss import SpatioTemporalEmbLoss, SpatialEmbLoss, CovarianceLoss, CovarianceLossDirect
+from loss.SpatialEmbLoss import SpatioTemporalEmbLoss, SpatialEmbLoss, CovarianceLoss
 
 from loss.embedding_loss import compute_embedding_loss
 from utils.AverageMeter import AverageMeter
+from utils.Constants import PRED_EMBEDDING, PRED_SEM_SEG, PRED_LOGITS
 
 
 def bootstrapped_ce_loss(raw_ce, n_valid_pixels_per_im=None, fraction=0.25):
@@ -18,37 +19,44 @@ def bootstrapped_ce_loss(raw_ce, n_valid_pixels_per_im=None, fraction=0.25):
 
 
 def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=None):
-  pred_seg = pred[0]
-  pred_mask = None
-  pred_extra = pred[1] if len(pred) > 1 else None
+  """
+
+  :param args: 
+  :param criterion: 
+  :param pred: model prediction formatted as dict using Forward.format
+  :param target: 
+  :param target_extra: 
+  :param iou_meter: 
+  :return: 
+  """
+  pred_mask = pred[PRED_LOGITS]
   loss_mask = 0
-  loss_image = torch.zeros_like(pred_seg[:, -1])
+  loss_image = torch.zeros_like(pred_mask[:, -1])
   if "ce" in args.losses:
-    if len(pred_seg.shape) > 4:
-      pred_mask = F.interpolate(pred_seg, target.shape[2:], mode="trilinear")
+    if len(pred_mask.shape) > 4:
+      pred_mask = F.interpolate(pred_mask, target.shape[2:], mode="trilinear")
     else:
-      pred_mask = F.interpolate(pred_seg, target.shape[2:], mode="bilinear")
+      pred_mask = F.interpolate(pred_mask, target.shape[2:], mode="bilinear")
 
     if isinstance(criterion, torch.nn.CrossEntropyLoss):
       loss_image = criterion(pred_mask, target.squeeze(1).cuda().long())
     else:
-      # For binary segmentation use just the first and the last channel
-      pred_mask = torch.stack((pred_mask[:, 0], pred_mask[:, -1]), dim=1)
       loss_image = criterion(pred_mask[:, -1], target.squeeze(1).cuda().float())
     loss_mask = bootstrapped_ce_loss(loss_image)
 
   loss_extra = {}
-  if pred_extra is not None:
+  if len(pred.keys()) > 1:
     # estimate loss for pixel level similarity
     if 'similarity' in args.losses:
       # get reference similarity mask
-      assert 'similarity_ref' in target_extra
-      batch_size = pred_extra.shape[0]
+      assert 'similarity_ref' in target_extra and PRED_EMBEDDING in pred
+      pred_similarity = pred[PRED_EMBEDDING]
+      batch_size = pred_similarity.shape[0]
       similarity_ref = target_extra['similarity_ref'][:, :, 0].cuda().float()
       similarity_ref = F.interpolate(similarity_ref, scale_factor=[0.125,0.125], mode='nearest')
 
       # restore the time dimension
-      pred_extra = F.interpolate(pred_extra.unsqueeze(1), scale_factor=[2, 2], mode='bilinear').squeeze(1)
+      pred_extra = F.interpolate(pred_similarity.unsqueeze(1), scale_factor=[2, 2], mode='bilinear').squeeze(1)
       shape = similarity_ref.shape[2:]
       A = F.softmax(pred_extra.exp(), dim=-1)
       # A = A.contiguous()
@@ -75,26 +83,20 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
       loss_similarity = criterion_extra(y, similarity_target)
       loss_extra['similarity'] = bootstrapped_ce_loss(loss_similarity)
     if "embedding" in args.losses:
-      pred_extra = F.interpolate(pred_extra, scale_factor=(1,8,8), mode='trilinear')
-      loss_embedding, _, _ = compute_embedding_loss(pred_extra, target_extra['similarity_ref'].cuda(), args.config_path)
+      pred_emb = F.interpolate(pred[PRED_EMBEDDING], scale_factor=(1,8,8), mode='trilinear')
+      loss_embedding, _, _ = compute_embedding_loss(pred_emb, target_extra['similarity_ref'].cuda(), args.config_path)
       loss_extra['embedding'] = loss_embedding
     elif "spatiotemporal_embedding" in args.losses:
       iou_all_instances = AverageMeter()
-      pred_extra = F.interpolate(pred_extra, size=target.shape[-3:], mode='trilinear')
-      # spatial embedding loss expects the last channel to be a seed map, which could be the fg/bg prediction here
-      # pred_spatemb = torch.cat((pred_extra.cuda(), pred_mask[:, -1:]), dim=1)
-      pred_spatemb = pred_extra
+      pred_spatemb = F.interpolate(pred[PRED_EMBEDDING], size=target.shape[-3:], mode='trilinear')
       criterion_extra = SpatioTemporalEmbLoss(n_sigma=args.embedding_dim - 4, to_center=args.coordinate_centre)
       loss_extra['spatiotemporal_embedding'] = criterion_extra.forward(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
                                                                labels=None, iou=True, iou_meter=iou_all_instances,
                                                                w_var=10)
       iou_meter.update(iou_all_instances.avg)
-      # loss_mask = 0
     elif "spatial_embedding" in args.losses:
       iou_all_instances = AverageMeter()
-      pred_extra = F.interpolate(pred_extra, scale_factor=(1, 8, 8), mode='trilinear')
-      # spatial embedding loss expents the last channel to be a seed map, which could be the fg/bg prediction here
-      # pred_spatemb = torch.cat((pred_extra.cuda(), pred_mask[:, -1:]), dim=1)
+      pred_extra = F.interpolate(pred[PRED_EMBEDDING], scale_factor=(1, 8, 8), mode='trilinear')
       pred_spatemb = pred_extra
       criterion_extra = SpatialEmbLoss(n_sigma=args.embedding_dim - 4)
       loss_extra['spatial_embedding'] = criterion_extra(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
@@ -104,21 +106,18 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
 
     elif np.any(["covariance" in s for s in args.losses]):
       iou_all_instances = AverageMeter()
-      pred_extra = F.interpolate(pred_extra, size=target.shape[-3:], mode='trilinear')
-      # spatial embedding loss expents the last channel to be a seed map, which could be the fg/bg prediction here
-      # pred_spatemb = torch.cat((pred_extra.cuda(), pred_mask[:, -1:]), dim=1)
+      pred_extra = F.interpolate(pred[PRED_EMBEDDING], size=target.shape[-3:], mode='trilinear')
       pred_spatemb = pred_extra
-      criterion_extra = CovarianceLoss(n_sigma=args.embedding_dim - 4) if 'covariance_loss' in args.losses else \
-        CovarianceLossDirect(n_sigma=args.embedding_dim - 4)
+      criterion_extra = CovarianceLoss(n_sigma=args.embedding_dim - 4)
       loss_extra['covar_loss'] = criterion_extra(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
                                          labels=None, iou=True, iou_meter=iou_all_instances)
       iou_meter.update(iou_all_instances.avg)
 
     if 'multi_class' in args.losses:
-      assert pred_seg.shape[1] > 2 and 'sem_seg' in target_extra
+      assert PRED_SEM_SEG in pred and 'sem_seg' in target_extra
       criterion_multi = torch.nn.CrossEntropyLoss(reduce=False)
-      # FIXME: assumption that the last channel is always foreground/background segmentation
-      loss_multi = criterion_multi(pred_seg[:, :-1], target_extra['sem_seg'].cuda().long().squeeze(1))
+      pred_sem_seg = pred[PRED_SEM_SEG]
+      loss_multi = criterion_multi(pred_sem_seg[:, :-1], target_extra['sem_seg'].cuda().long().squeeze(1))
       loss_multi = bootstrapped_ce_loss(loss_multi)
       loss_mask += loss_multi
       loss_extra['loss_multi'] = loss_multi
