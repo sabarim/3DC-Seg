@@ -30,7 +30,7 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
   :return: 
   """
   pred_mask = pred[PRED_LOGITS]
-  loss_mask = 0
+  loss = 0
   loss_image = torch.zeros_like(pred_mask[:, -1])
   if "ce" in args.losses:
     if len(pred_mask.shape) > 4:
@@ -43,6 +43,7 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
     else:
       loss_image = criterion(pred_mask[:, -1], target.squeeze(1).cuda().float())
     loss_mask = bootstrapped_ce_loss(loss_image)
+    loss += loss_mask
 
   loss_extra = {}
   if len(pred.keys()) > 1:
@@ -89,28 +90,25 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
     elif np.any(["spatiotemporal" in s for s in args.losses]):
       iou_all_instances = AverageMeter()
       pred_spatemb = F.interpolate(pred[PRED_EMBEDDING], size=target.shape[-3:], mode='trilinear')
-      criterion_extra = SpatioTemporalEmbLoss(n_sigma=args.embedding_dim - 4, to_center=args.coordinate_centre) if "spatiotemporal_embedding" in args.losses else SpatioTemporalLossWithFloatingCentre(n_sigma=args.embedding_dim - 4, to_center=args.coordinate_centre)
-      loss_extra['spatiotemporal_embedding'] = criterion_extra.forward(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
+      criterion_extra = SpatioTemporalEmbLoss(n_sigma=args.embedding_dim - 4, to_center=args.coordinate_centre) if \
+        "spatiotemporal_embedding" in args.losses \
+        else SpatioTemporalLossWithFloatingCentre(n_sigma=args.embedding_dim - 4, to_center=args.coordinate_centre)
+      criterion_extra = criterion_extra.to(pred_spatemb.device)
+      loss_spatiotemporal = criterion_extra(pred_spatemb, target_extra['similarity_raw_mask'].to(pred_spatemb),
                                                                labels=None, iou=True, iou_meter=iou_all_instances,
                                                                w_var=10)
+      loss_extra['spatiotemporal_embedding'] = loss_spatiotemporal.mean().detach()
+      loss += loss_spatiotemporal.mean()
       iou_meter.update(iou_all_instances.avg)
-    elif "spatial_embedding" in args.losses:
-      iou_all_instances = AverageMeter()
-      pred_extra = F.interpolate(pred[PRED_EMBEDDING], scale_factor=(1, 8, 8), mode='trilinear')
-      pred_spatemb = pred_extra
-      criterion_extra = SpatialEmbLoss(n_sigma=args.embedding_dim - 4)
-      loss_extra['spatial_embedding'] = criterion_extra(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
-                                         labels=None, iou=True, iou_meter=iou_all_instances)
-      iou_meter.update(iou_all_instances.avg)
-      # loss_mask = 0
-
     elif np.any(["covariance" in s for s in args.losses]):
       iou_all_instances = AverageMeter()
       pred_extra = F.interpolate(pred[PRED_EMBEDDING], size=target.shape[-3:], mode='trilinear')
       pred_spatemb = pred_extra
-      criterion_extra = CovarianceLoss(n_sigma=args.embedding_dim - 4)
-      loss_extra['covar_loss'] = criterion_extra(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
+      criterion_extra = CovarianceLoss(n_sigma=args.embedding_dim - 4).to(pred_spatemb.device)
+      covar_loss = criterion_extra(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
                                          labels=None, iou=True, iou_meter=iou_all_instances)
+      loss_extra['covar_loss'] = covar_loss.mean().data
+      loss += covar_loss.mean()
       iou_meter.update(iou_all_instances.avg)
 
     if 'multi_class' in args.losses:
@@ -119,12 +117,12 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
       pred_sem_seg = pred[PRED_SEM_SEG]
       loss_multi = criterion_multi(pred_sem_seg[:, :-1], target_extra['sem_seg'].cuda().long().squeeze(1))
       loss_multi = bootstrapped_ce_loss(loss_multi)
-      loss_mask += loss_multi
-      loss_extra['loss_multi'] = loss_multi
+      loss += loss_multi
+      loss_extra['loss_multi'] = loss_multi.data
 
 
 
   # print("loss_extra {}".format(loss_extra))
-  loss = loss_mask + sum(loss_extra.values())
+  # loss = loss_mask + sum(loss_extra.values())
 
-  return loss, loss_image, pred_mask, loss_extra
+  return loss, loss_image.data, pred_mask, loss_extra
