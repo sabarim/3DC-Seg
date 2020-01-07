@@ -41,7 +41,7 @@ class SpatioTemporalEmbLoss(nn.Module):
         batch_size, tw, height, width = prediction.size(
             0), prediction.size(2), prediction.size(-2), prediction.size(-1)
 
-        xyzm_s = self.xyzm[:, 0:tw, 0:height, 0:width].contiguous().cuda() # 3 x t x h x w
+        xyzm_s = self.xyzm[:, 0:tw, 0:height, 0:width].contiguous() # 3 x t x h x w
         if self.embedding_size > 3:
             xyzm_s = torch.cat((xyzm_s, torch.zeros(self.embedding_size - 3, tw, height, width)), dim=0)
 
@@ -55,9 +55,9 @@ class SpatioTemporalEmbLoss(nn.Module):
             seed_map = torch.sigmoid(prediction[b, self.embedding_size+self.n_sigma:self.embedding_size+self.n_sigma + 1])  # 1 x t x h x w
 
             # loss accumulators
-            var_loss = 0
-            instance_loss = 0
-            seed_loss = 0
+            var_loss = []
+            instance_loss = []
+            seed_loss = []
             obj_count = 0
 
             instance = instances[b]  #  1 x t x h x w
@@ -69,8 +69,8 @@ class SpatioTemporalEmbLoss(nn.Module):
             # regress bg to zero
             bg_mask = instance == 0
             if bg_mask.sum() > 0:
-                seed_loss += torch.sum(
-                    torch.pow(seed_map[bg_mask] - 0, 2))
+                seed_loss += [torch.sum(
+                    torch.pow(seed_map[bg_mask] - 0, 2))]
 
             for id in instance_ids:
 
@@ -92,9 +92,10 @@ class SpatioTemporalEmbLoss(nn.Module):
                     self.n_sigma, 1, 1)   # n_sigma x 1 x 1
 
                 # calculate var loss before exp
+                # NOTE: detach the loss before accumulation to avoid memory leak due to pytorch graph creation
                 var_loss = var_loss + \
-                    torch.mean(
-                        torch.pow(sigma_in - s.detach(), 2))
+                    [torch.mean(
+                        torch.pow(sigma_in - s.detach(), 2))]
 
                 s = torch.exp(s*10)
 
@@ -104,11 +105,11 @@ class SpatioTemporalEmbLoss(nn.Module):
 
                 # apply lovasz-hinge loss
                 instance_loss = instance_loss + \
-                    lovasz_hinge(dist*2-1, in_mask.float())
+                    [lovasz_hinge(dist*2-1, in_mask.float())]
 
                 # seed loss
-                seed_loss += self.foreground_weight * torch.sum(
-                    torch.pow(seed_map[in_mask] - dist[in_mask].detach(), 2))
+                seed_loss += [self.foreground_weight * torch.sum(
+                    torch.pow(seed_map[in_mask] - dist[in_mask].detach(), 2))]
 
                 # calculate instance iou
                 if iou:
@@ -116,13 +117,16 @@ class SpatioTemporalEmbLoss(nn.Module):
 
                 obj_count += 1
 
+            instance_loss = torch.stack(instance_loss).sum(dim=0)
+            var_loss = torch.stack(var_loss).sum(dim=0)
             if obj_count > 0:
                 instance_loss /= obj_count
                 var_loss /= obj_count
 
-            seed_loss = seed_loss / (height * width)
+            seed_loss = torch.stack(seed_loss).sum(dim=0) / (height * width)
 
-            loss += w_inst * instance_loss + w_var * var_loss + w_seed * seed_loss
+            loss += w_inst * instance_loss + w_var * var_loss + \
+                    w_seed * seed_loss
 
         loss = loss / (b+1)
 
@@ -158,7 +162,7 @@ class SpatioTemporalLossWithFloatingCentre(nn.Module):
         batch_size, tw, height, width = prediction.size(
             0), prediction.size(2), prediction.size(-2), prediction.size(-1)
 
-        xyzm_s = self.xyzm[:, 0:tw, 0:height, 0:width].contiguous().cuda()  # 3 x t x h x w
+        xyzm_s = self.xyzm[:, 0:tw, 0:height, 0:width].contiguous()  # 3 x t x h x w
         if self.embedding_size > 3:
             xyzm_s = torch.cat((xyzm_s, torch.zeros(self.embedding_size - 3, tw, height, width)), dim=0)
 
@@ -229,11 +233,11 @@ class SpatioTemporalLossWithFloatingCentre(nn.Module):
         
                 # seed loss
                 seed_loss += self.foreground_weight * torch.sum(
-                    torch.pow(seed_map[in_mask] - dist[in_mask].detach(), 2))
+                        torch.pow(seed_map[in_mask] - dist[in_mask].detach(), 2))
 
                 # calculate instance iou
                 if iou:
-                    iou_meter.update(calculate_iou(dist > 0.5, in_mask))
+                    iou_meter.update(calculate_iou(dist[:, ignore_mask] > 0.5, in_mask[:, ignore_mask]))
 
                 obj_count += 1
 
@@ -288,15 +292,15 @@ class CovarianceLoss(nn.Module):
         for b in range(0, batch_size):
 
             emb = torch.tanh(prediction[b, 0:self.embedding_size])  # e x t x h x w
-            spatial_emb = emb[0:3] + xyzm_s.cuda()  # e x t x h x w
+            spatial_emb = emb[0:3] + xyzm_s  # e x t x h x w
             sigma = prediction[b, self.embedding_size:self.embedding_size + self.n_sigma]  # n_sigma x t x h x w
             seed_map = torch.sigmoid(prediction[b,
                                      self.embedding_size + self.n_sigma:self.embedding_size + self.n_sigma + 1])  # 1 x t x h x w
 
             # loss accumulators
-            var_loss = 0
-            instance_loss = 0
-            seed_loss = 0
+            var_loss = []
+            instance_loss = []
+            seed_loss = []
             obj_count = 0
 
             instance = instances[b]  # 1 x t x h x w
@@ -337,8 +341,8 @@ class CovarianceLoss(nn.Module):
 
                 # calculate var loss before exp
                 var_loss = var_loss + \
-                           torch.mean(
-                               torch.pow(precision_vals - s, 2))
+                           [torch.mean(
+                               torch.pow(precision_vals - s.detach(), 2))]
 
                 # s = torch.exp(s * 10)
 
@@ -350,11 +354,11 @@ class CovarianceLoss(nn.Module):
 
                 # apply lovasz-hinge loss
                 instance_loss = instance_loss + \
-                                lovasz_hinge(dist * 2 - 1, in_mask.float())
+                                [lovasz_hinge(dist * 2 - 1, in_mask.float())]
 
                 # seed loss
-                seed_loss += self.foreground_weight * torch.sum(
-                    torch.pow(seed_map[in_mask] - dist[in_mask].detach(), 2))
+                seed_loss += [self.foreground_weight * torch.sum(
+                    torch.pow(seed_map[in_mask] - dist[in_mask].detach(), 2))]
 
                 # calculate instance iou
                 if iou:
@@ -362,17 +366,20 @@ class CovarianceLoss(nn.Module):
 
                 obj_count += 1
 
+            instance_loss = torch.stack(instance_loss).sum(dim=0)
+            var_loss = torch.stack(var_loss).sum(dim=0)
             if obj_count > 0:
                 instance_loss /= obj_count
                 var_loss /= obj_count
 
+            seed_loss = torch.stack(seed_loss).sum(dim=0)
             seed_loss = seed_loss / (height * width)
 
             loss += w_inst * instance_loss + w_var * var_loss + w_seed * seed_loss
 
         loss = loss / (b + 1)
 
-        return loss + prediction.sum() * 0
+        return loss
 
 
 class SpatialEmbLoss(nn.Module):
@@ -407,7 +414,7 @@ class SpatialEmbLoss(nn.Module):
         for b in range(0, batch_size):
             for t in range(time):
                 prediction = predictions[:, :, t]
-                spatial_emb = torch.tanh(prediction[b, 0:2]) + xym_s.cuda()  # 2 x h x w
+                spatial_emb = torch.tanh(prediction[b, 0:2]) + xym_s  # 2 x h x w
                 sigma = prediction[b, 2:2 + self.n_sigma]  # n_sigma x h x w
                 seed_map = torch.sigmoid(
                     prediction[b, 2 + self.n_sigma:2 + self.n_sigma + 1])  # 1 x h x w
@@ -437,7 +444,7 @@ class SpatialEmbLoss(nn.Module):
                     # calculate center of attraction
                     if self.to_center:
                         xy_in = xym_s[in_mask.expand_as(xym_s)].view(2, -1)
-                        center = xy_in.mean(1).view(2, 1, 1).cuda()  # 2 x 1 x 1
+                        center = xy_in.mean(1).view(2, 1, 1)  # 2 x 1 x 1
                     else:
                         center = spatial_emb[in_mask.expand_as(spatial_emb)].view(
                             2, -1).mean(1).view(2, 1, 1)  # 2 x 1 x 1
@@ -458,7 +465,7 @@ class SpatialEmbLoss(nn.Module):
 
                     # calculate gaussian
                     dist = torch.exp(-1 * torch.sum(
-                        torch.pow(spatial_emb - center, 2) * s.cuda(), 0, keepdim=True))
+                        torch.pow(spatial_emb - center, 2) * s, 0, keepdim=True))
 
                     # apply lovasz-hinge loss
                     instance_loss = instance_loss + \
