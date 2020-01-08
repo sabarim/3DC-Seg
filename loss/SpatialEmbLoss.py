@@ -177,9 +177,9 @@ class SpatioTemporalLossWithFloatingCentre(nn.Module):
                                      self.embedding_size + self.n_sigma:self.embedding_size + self.n_sigma + 1])  # 1 x t x h x w
 
             # loss accumulators
-            var_loss = 0
-            instance_loss = 0
-            seed_loss = 0
+            var_loss = []
+            instance_loss = []
+            seed_loss = []
             obj_count = 0
 
             instance = instances[b]  # 1 x t x h x w
@@ -191,61 +191,68 @@ class SpatioTemporalLossWithFloatingCentre(nn.Module):
             # regress bg to zero
             bg_mask = instance == 0
             if bg_mask.sum() > 0:
-                seed_loss += torch.sum(
-                    torch.pow(seed_map[bg_mask] - 0, 2))
+                seed_loss += [torch.sum(
+                    torch.pow(seed_map[bg_mask] - 0, 2))]
 
             for id in instance_ids:
 
                 in_mask = instance.eq(id)  # 1 x t x h x w
+                var_losses = []
+                centres = []
+                s_mean = []
 
-                # calculate center of attraction
-                centres = [spatial_emb[:, t][in_mask[:, t].expand_as(spatial_emb[:, t])].view(
-                    self.embedding_size, -1).mean(1).view(self.embedding_size, 1, 1) for t in range(tw)]  # [e x 1 x 1,...]
+                for t in range(tw):
+                    # continue if the temporal frame does not contain the object
+                    if in_mask[:, t].sum() == 0:
+                        s_mean += [torch.zeros(self.n_sigma,1,1).to(prediction.device)]
+                        continue
+                    # calculate center of attraction
+                    centre = spatial_emb[:, t][in_mask[:, t].expand_as(spatial_emb[:, t])].\
+                        view(self.embedding_size, -1).mean(1).view(self.embedding_size, 1, 1) # [e x 1 x 1,...]
+                    centres += [centre]
 
-                # calculate sigma
-                sigma_ins = [sigma[:, t][in_mask[:, t].expand_as(
-                    sigma[:, t])].view(self.n_sigma, -1) for t in range(tw)]
+                    # calculate sigma
+                    sigma_in = sigma[:, t][in_mask[:, t].expand_as(
+                        sigma[:, t])].view(self.n_sigma, -1)
 
-                s = [sigma_in.mean(1).view(
-                    self.n_sigma, 1, 1) for sigma_in in sigma_ins]  # n_sigma x 1 x 1
+                    s = sigma_in.mean(1).view(self.n_sigma, 1, 1)  # n_sigma x 1 x 1
 
-                # calculate var loss before exp
-                var_losses = torch.stack([torch.mean(
-                               torch.pow(sigma_ins[t] - s[t].detach(), 2)) for t in range(len(s))])
-                #FIXME: var_losses for frames without any instances are ignored
-                var_losses = var_losses[torch.isnan(var_losses) != True]
-                var_loss = var_loss + \
-                           torch.mean(var_losses)
-                
-                s = torch.stack(s).permute(1,0,2,3)
-                s = torch.exp(s* 10) # t
-                centres = torch.stack(centres)
-                ignore_mask = torch.isnan(centres) != True
-                centre = centres[ignore_mask].mean(dim=0)
+                    # calculate var loss before exp
+                    var_losses += [torch.mean(torch.pow(sigma_in - s.detach(), 2))]
 
+                    s_mean += [torch.exp(s * 10)]  # t]
+
+                centre = torch.stack(centres).mean(0)
+                s = torch.stack(s_mean).permute(1, 0, 2, 3)
                 # calculate gaussian
-                ignore_mask = torch.any(ignore_mask, dim=1).squeeze()
                 dist = torch.exp(-1 * torch.sum(
                     torch.pow(spatial_emb - centre.unsqueeze(-1), 2) * s, 0, keepdim=True))
+
                 # apply lovasz-hinge loss
                 instance_loss = instance_loss + \
-                        lovasz_hinge(dist[:, ignore_mask] * 2 - 1, in_mask[:, ignore_mask].float())
-        
+                                 [lovasz_hinge(dist * 2 - 1, in_mask.float())]
+
+                var_loss = var_loss + \
+                           [torch.sum(torch.stack(var_losses), dim=0)]
+
+
                 # seed loss
-                seed_loss += self.foreground_weight * torch.sum(
-                        torch.pow(seed_map[in_mask] - dist[in_mask].detach(), 2))
+                seed_loss += [self.foreground_weight * torch.sum(
+                    torch.pow(seed_map[in_mask] - dist[in_mask].detach(), 2))]
 
                 # calculate instance iou
                 if iou:
-                    iou_meter.update(calculate_iou(dist[:, ignore_mask] > 0.5, in_mask[:, ignore_mask]))
+                    iou_meter.update(calculate_iou(dist > 0.5, in_mask))
 
                 obj_count += 1
 
+            instance_loss = torch.stack(instance_loss).sum(dim=0)
+            var_loss = torch.stack(var_loss).sum(dim=0)
             if obj_count > 0:
                 instance_loss /= obj_count
                 var_loss /= obj_count
 
-            seed_loss = seed_loss / (height * width)
+            seed_loss = torch.stack(seed_loss).sum(dim=0) / (height * width)
 
             loss += w_inst * instance_loss + w_var * var_loss + w_seed * seed_loss
 
