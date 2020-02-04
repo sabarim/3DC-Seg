@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 
 from datasets.DAVIS import DAVIS, DAVISEval
+from scripts.path_constants import DAVIS_ROOT
 from util import get_one_hot_vectors
 from utils.Resize import ResizeMode, resize
 
@@ -16,7 +17,7 @@ class DAVIS16(DAVIS):
     super(DAVIS16, self).__init__(root, imset, is_train=is_train, crop_size=crop_size,
                                   temporal_window=temporal_window, random_instance=random_instance,
                                   resize_mode=resize_mode, proposal_dir=proposal_dir,
-                                  max_temporal_gap=max_temporal_gap, min_temporal_gap=1)
+                                  max_temporal_gap=max_temporal_gap, min_temporal_gap=1, resolution=resolution)
     self.random_instance_ids = {}
     self.num_classes = num_classes
 
@@ -268,7 +269,7 @@ class DAVISSimilarity(DAVIS16):
     super(DAVISSimilarity, self).__init__(root, imset, is_train=is_train, crop_size=crop_size,
                                   temporal_window=temporal_window, random_instance=random_instance,
                                   resize_mode=resize_mode, proposal_dir=proposal_dir,
-                                  max_temporal_gap=max_temporal_gap, min_temporal_gap=1, num_classes=10)
+                                  max_temporal_gap=max_temporal_gap, min_temporal_gap=1, num_classes=10, resolution=resolution)
 
   def __getitem__(self, item):
     input_dict = super(DAVISSimilarity, self).__getitem__(item)
@@ -285,3 +286,16 @@ class DAVISSimilarity(DAVIS16):
       input_dict['target'] = (input_dict['target'] != 0).astype(np.uint8)
 
     return input_dict
+
+
+if __name__ == '__main__':
+    dataset = DAVISSimilarity(DAVIS_ROOT, is_train=True, crop_size=[720,1280], resize_mode=ResizeMode.RESIZE_SHORT_EDGE_AND_CROP)
+    for i in np.random.choice(np.arange(dataset.__len__()), 5):
+      result = dataset.__getitem__(i)
+      print(result['images'].shape)
+      print("cats: {}\n instances: {}\n image range: {}\nfgmask: {}".format(np.unique(result['target_extra']['sem_seg']),
+                                                                        np.unique(result['target_extra'][
+                                                                                    'similarity_raw_mask']),
+                                                                        (
+                                                                        result['images'].min(), result['images'].max()),
+                                                                        np.unique(result['target'])))

@@ -37,6 +37,7 @@ class DAVIS(data.Dataset):
     self.num_frames = {}
     self.num_objects = {}
     self.shape = {}
+    self.shape480p = {}
     self.img_list = []
     self.reference_list = []
     self.create_img_list(_imset_f)
@@ -50,6 +51,7 @@ class DAVIS(data.Dataset):
     # self.occluders = load_occluders(PASCAL_VOC_PATH)
 
   def set_paths(self, imset, resolution, root):
+    print(resolution)
     self.mask_dir = os.path.join(root, 'Annotations_unsupervised', resolution)
     self.image_dir = os.path.join(root, 'JPEGImages', resolution)
     _imset_dir = os.path.join(root, 'ImageSets')
@@ -65,6 +67,8 @@ class DAVIS(data.Dataset):
         _mask = np.array(Image.open(os.path.join(self.mask_dir, _video, '00000.png')).convert("P"))
         self.num_objects[_video] = np.max(_mask)
         self.shape[_video] = np.shape(_mask)
+        self.shape480p[_video] = np.shape(np.array(Image.open(os.path.join(self.mask_dir.replace('Full-Resolution', '480p'),
+                                                                          _video, '00000.png')).convert("P")))
         self.img_list += list(glob.glob(os.path.join(self.image_dir, _video, '*.jpg')))
 
       if self.is_train:
@@ -128,8 +132,6 @@ class DAVIS(data.Dataset):
     proposals, object_mapping = self.filter_proposals(gt_mask, proposals)
 
     raw_proposals = {'scores':np.zeros(self.max_proposals), 'labels':np.zeros(self.max_proposals)}
-    # if len(proposals['mask']) > 0:
-    #   raw_proposals['mask'][:len(proposals['mask'])] = proposals['mask'][:, 0].data.cpu().numpy()
     if len(proposals['mask']) == 0:
       print("WARN: no proposals found in {}".format(proposal_file))
     num_proposals = len(proposals['mask'])
@@ -169,6 +171,7 @@ class DAVIS(data.Dataset):
     num_objects = self.num_objects[sequence]
     info['num_objects'] = num_objects
     info['shape'] = self.shape[sequence]
+    info['shape480p'] = self.shape480p[sequence] if sequence in self.shape480p else -1
     obj_id = 1
     index = int(os.path.splitext(os.path.basename(img_file))[0])
 

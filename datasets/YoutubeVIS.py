@@ -107,4 +107,11 @@ class YoutubeVISDataset(YoutubeVOSDataset):
 
 if __name__ == '__main__':
     dataset = YoutubeVISDataset(YOUTUBEVIS_ROOT, is_train=True)
-    dataset.__getitem__(110)
+    for i in np.random.choice(np.arange(dataset.__len__()), 5):
+      result = dataset.__getitem__(i)
+      print("cats: {}\n instances: {}\n image range: {}\nfgmask: {}".format(np.unique(result['target_extra']['sem_seg']),
+                                                                        np.unique(result['target_extra'][
+                                                                                    'similarity_raw_mask']),
+                                                                        (
+                                                                        result['images'].min(), result['images'].max()),
+                                                                        np.unique(result['target'])))
