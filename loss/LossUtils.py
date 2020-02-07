@@ -36,7 +36,7 @@ def parse_embedding_output(model_embedding_output, embedding_size):
   inverse_vars, corr_coeffs = model_embedding_output.split((embedding_size, num_nondiag_vals), dim=1)
 
   # activation function: exp() for inverse variances, tanh() for correlation coefficients
-  inverse_vars = (inverse_vars * 10).exp()
+  inverse_vars = inverse_vars.exp() * 10.
   corr_coeffs = (corr_coeffs * 0.5).tanh()
 
   # convert correlation coefficients to non-diagonal entries of the precision matrix
@@ -89,8 +89,7 @@ def precision_tensor_to_matrix(precision, embedding_size, compute_mean = True):
 
   # populate non-diagonal entries
   nondiag_idxes = torch.triu_indices(embedding_size, embedding_size, 1).t().tolist()  # [num_nondiag_vals, 2]
-  for i in range(len(nondiag_idxes)):
-    dim1, dim2 = nondiag_idxes[i]
+  for i, (dim1, dim2) in enumerate(nondiag_idxes, start=embedding_size):
     prec_12 = precision[:, i]
     precision_mat[:, dim1,dim2] = prec_12
     precision_mat[:, dim2, dim1] = prec_12

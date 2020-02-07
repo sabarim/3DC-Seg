@@ -88,23 +88,35 @@ def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=Non
       loss_embedding, _, _ = compute_embedding_loss(pred_emb, target_extra['similarity_ref'].cuda(), args.config_path)
       loss_extra['embedding'] = loss_embedding
     elif np.any(["spatiotemporal" in s for s in args.losses]):
+      name = 'spatiotemporal_embedding'
       iou_all_instances = AverageMeter()
       pred_spatemb = F.interpolate(pred[PRED_EMBEDDING], size=target.shape[-3:], mode='trilinear')
-      criterion_extra = SpatioTemporalEmbLoss(n_sigma=args.embedding_dim - 4, to_center=args.coordinate_centre) if \
-        "spatiotemporal_embedding" in args.losses \
-        else SpatioTemporalLossWithFloatingCentre(n_sigma=args.embedding_dim - 4, to_center=args.coordinate_centre)
+      criterion_extra = SpatioTemporalEmbLoss(embedding_size=args.embedding_dim - (args.n_sigma + 1),
+                                              n_sigma=args.n_sigma, to_center=args.coordinate_centre)
+        # if \
+        # "spatiotemporal_embedding" in args.losses \
+        # else SpatioTemporalLossWithFloatingCentre(n_sigma=args.embedding_dim - 4, to_center=args.coordinate_centre)
+      if 'spatiotemporal_no_ce' in args.losses:
+        pred_mask = F.interpolate(pred_mask, target.shape[2:], mode="trilinear")
+        pred_spatemb[:, -1] = pred_mask[:, -1]
+        name = 'spatiotemporal_no_ce'
+      elif 'spatiotemporal_floating_centre' in args.losses:
+        criterion_extra = SpatioTemporalLossWithFloatingCentre(n_sigma=args.embedding_dim - 4, to_center=args.coordinate_centre)
+        name = 'spatiotemporal_floating_centre'
+
       criterion_extra = criterion_extra.to(pred_spatemb.device)
       loss_spatiotemporal = criterion_extra(pred_spatemb, target_extra['similarity_raw_mask'].to(pred_spatemb),
                                                                labels=None, iou=True, iou_meter=iou_all_instances,
                                                                w_var=10)
-      loss_extra['spatiotemporal_embedding'] = loss_spatiotemporal.mean().detach()
+      loss_extra[name] = loss_spatiotemporal.mean().detach()
       loss += loss_spatiotemporal.mean()
       iou_meter.update(iou_all_instances.avg)
     elif np.any(["covariance" in s for s in args.losses]):
       iou_all_instances = AverageMeter()
       pred_extra = F.interpolate(pred[PRED_EMBEDDING], size=target.shape[-3:], mode='trilinear')
       pred_spatemb = pred_extra
-      criterion_extra = CovarianceLoss(n_sigma=args.embedding_dim - 4).to(pred_spatemb.device)
+      criterion_extra = CovarianceLoss(embedding_size=args.embedding_dim - (args.n_sigma + 1),
+                                       n_sigma=args.n_sigma).to(pred_spatemb.device)
       covar_loss = criterion_extra(pred_spatemb, target_extra['similarity_raw_mask'].cuda(),
                                          labels=None, iou=True, iou_meter=iou_all_instances)
       loss_extra['covar_loss'] = covar_loss.mean().data

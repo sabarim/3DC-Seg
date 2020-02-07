@@ -20,13 +20,13 @@ USE_ORACLE_REID = False
 USE_REID = False
 
 # maskrcnn_data_dir = "/globalwork/mahadevan/mywork/data/training/pytorch/forwarded/maskrcnn/thresh-0.7/"
-maskrcnn_data_dir = "../results/converted_proposals/thresh-0/"
-warped_data_dir = "../results/maskrcnn_warped"
-# davis_data_dir = '/globalwork/data/DAVIS-Unsupervised/DAVIS/'
+maskrcnn_data_dir = "/globalwork/mahadevan/data/davis_unsupervised_results/converted_proposals/thresh-0-all_fields/"
+warped_data_dir = "/globalwork/mahadevan/data/davis_unsupervised_results/results/maskrcnn_warped"
+davis_data_dir = '/globalwork/data/DAVIS-Unsupervised/DAVIS/'
 #davis_data_dir = '/globalwork/data/DAVIS-Unsupervised//DAVIS-test/DAVIS/'
-davis_data_dir = '/globalwork/data/DAVIS-Unsupervised/DAVIS-2019-Unsupervised-test-dev-480p//DAVIS/'
-flow_dir = "/globalwork/data/DAVIS-Unsupervised/DAVIS-2019-Unsupervised-test-dev-480p/DAVIS/flo/"
-out_dir = "../results/eval_maskrcnn_warp/davis-testdev/"
+# davis_data_dir = '/globalwork/data/DAVIS-Unsupervised/DAVIS-2019-Unsupervised-test-dev-480p//DAVIS/'
+flow_dir = "/globalwork/data/DAVIS-Unsupervised/DAVIS/flo/"
+out_dir = "results/eval_maskrcnn_warp/davis-val/"
 
 
 def get_iou(gt, pred):
@@ -40,7 +40,7 @@ def get_iou(gt, pred):
 
 
 def warp_all(associated_proposals, flo, f, seq):
-  masks = associated_proposals['masks']
+  masks = associated_proposals['mask']
   # pool = mp.Pool(4)
   # warped_masks = torch.cat([pool.apply(warp, args = (mask.unsqueeze(0).float().cuda(),
   #                                                    flo.unsqueeze(0).permute(0, -1, 1, 2).cuda()))
@@ -55,7 +55,7 @@ def warp_all(associated_proposals, flo, f, seq):
                               for mask in masks], dim=0)
   else:
     warped_masks = masks
-  associated_proposals['masks'] = warped_masks
+  associated_proposals['mask'] = warped_masks
   return associated_proposals
 
 
@@ -79,7 +79,7 @@ def get_initial_proposal(line, out_folder):
 
   # TODO: select topn n instead of using conf thresh
   associated_proposals = top_n_predictions_maskrcnn(proposals, MAX_PROPOSALS)
-  associated_proposals['track_ids'] = list(range(len(associated_proposals['masks'])))
+  associated_proposals['track_ids'] = list(range(len(associated_proposals['mask'])))
   write_output_mask(associated_proposals, out_folder + '/{:05d}.png'.format(0))
   pickle.dump(associated_proposals, open(out_folder + '/{:05d}.pickle'.format(0), 'wb'))
 
@@ -93,7 +93,7 @@ def get_initial_proposal(line, out_folder):
     # FIXME: assume that all gt objects are available in the first frame for now
     for i in range(len(gt)):
       gt_mask, iou, id = get_best_match(torch.from_numpy(gt[i]).unsqueeze(0),
-                                        associated_proposals['masks'])
+                                        associated_proposals['mask'])
       if gt_mask is None:
         print("WARN: GT object not found in the first frame proposals")
         gt_tracks[i] = np.max(associated_proposals["track_ids"]) + 1
@@ -119,7 +119,7 @@ def save_tracklets(proposals, warped_proposals, out_folder, f):
   """
   # top_predictions = select_top_predictions(proposals, CONF_THRESH)
   print("proposal length", len(list(proposals.values())))
-  shape = list(proposals['masks'].shape[2:])
+  shape = list(proposals['mask'].shape[2:])
   track_ids = np.ones_like(proposals['scores']) * -1
   ious = np.ones_like(proposals['scores']) * -1
   output_mask = np.zeros(shape)
@@ -128,9 +128,9 @@ def save_tracklets(proposals, warped_proposals, out_folder, f):
   # get track associations based on re-id
   reid_tracks = get_reid_tracks(proposals, track_ids)
 
-  for i in range(len(proposals['masks'])):
-    proposal_mask = proposals['masks'][i]
-    warped_mask, iou, id = get_best_match(proposal_mask, warped_proposals['masks'])
+  for i in range(len(proposals['mask'])):
+    proposal_mask = proposals['mask'][i]
+    warped_mask, iou, id = get_best_match(proposal_mask, warped_proposals['mask'])
     reid_flag = reid_tracks[i] != -1
 
     if warped_mask is not None:
@@ -149,8 +149,9 @@ def save_tracklets(proposals, warped_proposals, out_folder, f):
     ids_not_associated = np.where(track_ids == -1)
     track_ids[track_ids==-1]=list(range(int(max_track_id)+1, int(max_track_id)+1 + (track_ids==-1).sum()))
     for index in ids_not_associated[0]:
-      output_mask[proposals['masks'][index][0].data.cpu().numpy() == 1] = track_ids[index] + 1
-  proposals['track_ids'] =  track_ids
+      output_mask[proposals['mask'][index][0].data.cpu().numpy() == 1] = track_ids[index] + 1
+  proposals['track_ids'] =  track_ids[track_ids < MAX_PROPOSALS]
+  output_mask[output_mask>=20] = 0
 
   proposals['ious'] = ious
   out_file = os.path.join(out_folder, '{:05d}'.format(f + 1) + ".pickle")
@@ -192,8 +193,8 @@ def reid():
 
 
 def run_eval(line):
-  if line.rstrip() not in ["trucks-race","mantaray","mascot","motorbike-race", "obstacles"]:
-    return
+  # if line.rstrip() not in ["trucks-race","mantaray","mascot","motorbike-race", "obstacles"]:
+  #   return
   print(line)
   line = line.rstrip()
   out_folder = out_dir + line
@@ -226,13 +227,13 @@ def run_eval(line):
 
 
 def main():
-  seqs = davis_data_dir + "ImageSets/2019/test-dev.txt"
-  lines = ['drift-straight']
+  seqs = davis_data_dir + "ImageSets/2017/val.txt"
+  lines = ['bmx-trees']
   pool = mp.Pool(1)
-  with open(os.path.join(seqs), "r") as lines:
-   pool.map(run_eval, [line for line in lines])
-  # for line in lines:
-  #   run_eval(line)
+  # with open(os.path.join(seqs), "r") as lines:
+  #  pool.map(run_eval, [line for line in lines])
+  for line in lines:
+    run_eval(line)
 
 
 if __name__ == '__main__':

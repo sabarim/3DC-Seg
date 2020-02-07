@@ -41,6 +41,9 @@ def parse_args():
   parser.add_argument('--save_per_clip', dest='save_per_clip',
                       help='save embeddings per clip',
                       default=False, type=bool)
+  parser.add_argument('--visualise_clusters', dest='visualise_clusters',
+                      help='visualise_clusters',
+                      default=False, type=bool)
   parser.add_argument('--proposal_dir', dest='proposal_dir',
                       help='path to proposals',
                       default="/globalwork/mahadevan/vision/davis-unsupervised/results/converted_proposals/thresh-0-all_fields/", type=str)
@@ -92,6 +95,11 @@ def parse_args():
                       nargs='*',
                       default='ce', type=str)
 
+  #DAVIS flags
+  parser.add_argument('--resolution', dest='resolution',
+                      help='resolution of input images',
+                      default="480p", type=str)
+
   # flags for inference
   parser.add_argument('--exhaustive', dest='exhaustive',
                       help='Infer for clips starting from every frame',
@@ -99,6 +107,9 @@ def parse_args():
   parser.add_argument('--stitch', dest='stitch',
                       help='tube stitching strategy',
                       default='linear', type=str)
+  parser.add_argument('--use_fg_mask', dest='use_fg_mask',
+                      help='use the fg mask to filter seed map',
+                      default=False, type=bool)
 
   # BPTT
   parser.add_argument('--bptt', dest='bptt_len',
@@ -167,7 +178,9 @@ def parse_args():
 
   # embedding
   parser.add_argument('--embedding_dim', dest='embedding_dim',
-                      help='embedding dimension', default=64, type=int)
+                      help='embedding dimension', default=7, type=int)
+  parser.add_argument('--n_sigma', dest='n_sigma',
+                      help='dimensionality of sigma', default=3, type=int)
   parser.add_argument('--coordinate_centre', dest='coordinate_centre',
                       help='Use spatial coordinate centre instead of the embedding mean', default=True, type=str2bool)
 

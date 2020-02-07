@@ -14,10 +14,11 @@ from util import save_mask, get_one_hot_vectors
 
 
 USE_ORACLE_REID=False
-root = '/globalwork/data/DAVIS-Unsupervised/DAVIS-2019-Unsupervised-test-dev-480p/DAVIS/'
+# root = '/globalwork/data/DAVIS-Unsupervised/DAVIS-2019-Unsupervised-test-dev-480p/DAVIS/'
+root = '/globalwork/data/DAVIS-Unsupervised/DAVIS/'
 
 def save_images_for_eval(proposals, out_folder, f, output_tracks, last_update):
-  shape = proposals["masks"].shape[2:]
+  shape = proposals["mask"].shape[2:]
   output_mask = np.zeros(shape)
   gt_ids = []
   track_ids = proposals['track_ids']
@@ -25,23 +26,25 @@ def save_images_for_eval(proposals, out_folder, f, output_tracks, last_update):
   if USE_ORACLE_REID:
     for i in range(len(proposals.get_field('gt_masks'))):
       gt_mask, iou, id = get_best_match(torch.from_numpy(proposals.get_field('gt_masks')[i]).unsqueeze(0),
-                                        proposals.get_field('masks'))
+                                        proposals.get_field('mask'))
       if gt_mask is not None:
-        output_mask[proposals.get_field('masks')[id,0].data.cpu().numpy() == 1] = i + 1
+        output_mask[proposals.get_field('mask')[id,0].data.cpu().numpy() == 1] = i + 1
   else:
-    for i in range(len(track_ids)):
+    valid_track_ids = np.array(track_ids)[np.array(track_ids)<20]
+    for i in range(len(valid_track_ids)):
       if f == 0:
-        output_mask[proposals['masks'][i,0].data.cpu().numpy() == 1] = track_ids[i]
-      elif track_ids[i] in output_tracks:
-        track_ids[i] = output_tracks[track_ids[i]]
-        output_mask[proposals['masks'][i,0].data.cpu().numpy() == 1] = track_ids[i]
-        last_update[output_tracks[track_ids[i]]] = f
+        output_mask[proposals['mask'][i,0].data.cpu().numpy() == 1] = valid_track_ids[i]
+      elif valid_track_ids[i] in output_tracks:
+        valid_track_ids[i] = output_tracks[valid_track_ids[i]]
+        output_mask[proposals['mask'][i,0].data.cpu().numpy() == 1] = valid_track_ids[i]
+        last_update[output_tracks[valid_track_ids[i]]] = f
       elif len(output_tracks.keys()) < 20:
-        output_tracks[track_ids[i]] = len(output_tracks.keys())
+        output_tracks[valid_track_ids[i]] = len(output_tracks.keys())
         last_update = np.append(last_update,f)
-        output_mask[proposals['masks'][i,0].data.cpu().numpy() == 1] = len(output_tracks.keys()) + 1
+        output_mask[proposals['mask'][i,0].data.cpu().numpy() == 1] = len(output_tracks.keys()) + 1
 
 
+  output_mask[output_mask>20] = 0
   out_file = os.path.join(out_folder, '{:05d}'.format(f) + ".png")
   save_mask(output_mask.astype(np.int), out_file)
   return output_tracks, last_update
@@ -50,8 +53,8 @@ def save_images_for_eval(proposals, out_folder, f, output_tracks, last_update):
 def run_eval(line):
   print(line)
   line = line.rstrip()
-  in_folder = "../results/eval_maskrcnn_warp/davis-testdev/" + line
-  out_folder = "../results/eval_maskrcnn_warp/davis-testdev/updated_index/" + line
+  in_folder = "results/eval_maskrcnn_warp/davis-val/" + line
+  out_folder = "../results/eval_maskrcnn_warp/davis-val/updated_index/" + line
   if not os.path.exists(out_folder):
     os.makedirs(out_folder)
   all_proposals = glob.glob(os.path.join(in_folder, "*.pickle"))
@@ -75,13 +78,13 @@ def run_eval(line):
 
 
 def main():
-  seqs = root + "/ImageSets/2019/test-dev.txt"
-  lines = ['bmx-trees']
+  seqs = root + "/ImageSets/2017/val.txt"
+  lines = ['motocross-jump', 'paragliding-launch', 'parkour', 'pigs', 'scooter-black', 'shooting', 'soapbox']
   pool = mp.Pool(1)
-  with open(os.path.join(seqs), "r") as lines:
-   pool.map(run_eval, [line for line in lines])
-  #for line in lines:
-  #  run_eval(line)
+  # with open(os.path.join(seqs), "r") as lines:
+  #  pool.map(run_eval, [line for line in lines])
+  for line in lines:
+   run_eval(line)
 
 
 if __name__ == '__main__':

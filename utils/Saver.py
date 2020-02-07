@@ -52,6 +52,9 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
         start_epoch = 0
         checkpoint = {"model" : OrderedDict([('encoder.' + k.lower(), v)
                                             for k, v in checkpoint.items()]), "epoch" : start_epoch}
+      elif len(loadepoch.split("/")) > 1:
+        load_name = os.path.join(Constants.MODEL_ROOT, loadepoch + '.pth')
+        checkpoint = load_pretrained_weights(load_name)
       else:
         load_name = os.path.join('saved_models/', args.network_name,
                      '{}.pth'.format(loadepoch))

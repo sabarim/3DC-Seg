@@ -1,6 +1,7 @@
 import glob
 import json
 import os
+import random
 import time
 import numpy as np
 from PIL import Image
@@ -29,17 +30,25 @@ class YoutubeVISDataset(YoutubeVOSDataset):
     # _imset_f = glob.glob(_imset_dir + "/JPEGImages/*")
     return None
 
+  def set_video_id(self, video):
+    self.current_video = video
+    self.start_index = self.get_start_index(video)
+    if not self.is_train:
+      self.img_list = self.files_per_video[video]
+
   def create_img_list(self, _imset_f):
     start = time.time()
     with open(self.mask_dir, 'r') as readfile:
       json_content = json.load(readfile)
     anns = defaultdict(list)
-    for ann in json_content['annotations']:
-      anns[ann['video_id']].append(ann)
+    if 'annotations'in json_content:
+      for ann in json_content['annotations']:
+        anns[ann['video_id']].append(ann)
 
     results = [self.video_list(video, anns) for video in json_content['videos']]
     results = np.array(results)
     self.videos = results[:, 0]
+    self.files_per_video = dict(zip(self.videos, results[:, 1]))
     self.img_list = np.concatenate(results[:, 1])
     self.reference_list = self.img_list
 
@@ -64,8 +73,11 @@ class YoutubeVISDataset(YoutubeVOSDataset):
     img_list = [os.path.join(self.image_dir, filename) for filename in video['file_names']]
     video_name = img_list[0].split('/')[-2]
     shape = (video['height'], video['width'])
-    instances = [ann for ann in anns[video['id']]]
-    n_objects = len(instances)
+    if anns is not None:
+      instances = [ann for ann in anns[video['id']]]
+      n_objects = len(instances)
+    else:
+      n_objects = 0
     num_frames = len(img_list)
 
     print("Time to create image list for video {} is {}".format(video_name, time.time() - start))

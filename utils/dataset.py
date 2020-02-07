@@ -1,4 +1,4 @@
-from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT, YOUTUBEVIS_ROOT, MAPILLARY_ROOT
+from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT, YOUTUBEVIS_ROOT, MAPILLARY_ROOT, KITTI_ROOT
 
 
 def get_dataset(args):
@@ -28,7 +28,7 @@ def get_dataset(args):
     trainset = DAVISSimilarity(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
                        temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
                        random_instance=args.random_instance, max_temporal_gap=args.max_temporal_gap,
-                               num_classes=args.n_classes)
+                               num_classes=args.n_classes, resolution=args.resolution)
   elif args.train_dataset == "davis_siam":
     from datasets.DAVIS16 import DAVISSiam3d
     trainset = DAVISSiam3d(DAVIS_ROOT, is_train=True, crop_size=args.crop_size, resize_mode=args.resize_mode,
@@ -82,6 +82,11 @@ def get_dataset(args):
     from datasets.mapillary.MapillaryInstance import MapillaryVideoDataset
     trainset = MapillaryVideoDataset(MAPILLARY_ROOT, is_train=True, crop_size=args.crop_size,
                                  resize_mode=args.resize_mode, temporal_window=args.tw, min_size=args.min_size)
+  elif args.train_dataset == "kitti_mots":
+    from datasets.kitti.KITTIMOTS import KITTIDataset
+    trainset = KITTIDataset(KITTI_ROOT, is_train=True, crop_size=args.crop_size,
+                            resize_mode=args.resize_mode, temporal_window=args.tw, max_temporal_gap=args.max_temporal_gap,
+                            min_size=args.min_size)
   elif args.train_dataset == "coco_mapillary":
     from datasets.mapillary.COCOMapillary import COCOMapillary
     trainset = COCOMapillary(is_train=True, crop_size=args.crop_size,
@@ -104,6 +109,10 @@ def get_dataset(args):
     from datasets.mapillary.MapillaryInstance import MapillaryVideoDataset
     testset = MapillaryVideoDataset(MAPILLARY_ROOT, is_train=False, crop_size=args.crop_size_eval,
                                  resize_mode=args.resize_mode_eval, temporal_window=args.tw, min_size=args.min_size)
+  elif args.test_dataset == "kitti_mots":
+    from datasets.kitti.KITTIMOTS import KITTIDataset
+    testset = KITTIDataset(KITTI_ROOT, is_train=False, crop_size=args.crop_size_eval,
+                                    resize_mode=args.resize_mode_eval, temporal_window=args.tw, min_size=args.min_size)
   elif 'davis_proposal_guidance' in args.test_dataset:
     from datasets.DAVISProposalGuidance import DAVISProposalGuidanceEval
     testset = DAVISProposalGuidanceEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=args.random_instance,
@@ -122,7 +131,7 @@ def get_dataset(args):
     from datasets.DAVIS16 import DAVISSimilarity
     testset = DAVISSimilarity(DAVIS_ROOT, imset="2017/val.txt", crop_size=args.crop_size_eval, random_instance=args.random_instance,
                           resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir,
-                              num_classes=args.n_classes)
+                              num_classes=args.n_classes, resolution=args.resolution)
   elif "davis_siam" in args.test_dataset:
     from datasets.DAVIS16 import DAVISSiam3d
     testset = DAVISSiam3d(DAVIS_ROOT, crop_size=args.crop_size_eval, random_instance=args.random_instance,
@@ -153,8 +162,8 @@ def get_dataset(args):
   elif args.test_dataset == "youtube_vis":
     from datasets.YoutubeVIS import YoutubeVISDataset
     testset = YoutubeVISDataset(YOUTUBEVIS_ROOT, imset='valid', is_train=False,
-                                 random_instance=False, crop_size=args.crop_size,
-                                 resize_mode=args.resize_mode, temporal_window=args.tw, num_classes=args.n_classes)
+                                 random_instance=False, crop_size=args.crop_size_eval,
+                                 resize_mode=args.resize_mode_eval, temporal_window=args.tw, num_classes=args.n_classes)
 
   if 'infer' in args.task:
     if 'davis_proposal_guidance' in args.test_dataset:

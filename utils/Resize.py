@@ -24,6 +24,9 @@ class ResizeMode(Enum):
 
 def resize(tensors, resize_mode, size):
   if resize_mode == ResizeMode.UNCHANGED:
+    if tensors['image'].max() <= 1:
+      # rescale the mage tensor values to be within 0-255. This would make it consistent with other resize modes
+      tensors['image'] = tensors['image'] * 255.0
     return tensors
   crop_size = preprocess_size(size)
   if resize_mode == ResizeMode.RANDOM_RESIZE_AND_CROP:

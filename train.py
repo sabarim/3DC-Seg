@@ -4,8 +4,8 @@ import time
 import numpy as np
 import torch
 from PIL import Image
-from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler
+from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
 
 from Forward import forward
@@ -72,7 +72,7 @@ def train(train_loader, model, criterion, optimizer, epoch, foo):
       epoch, i * args.bs, len(train_loader) * args.bs, batch_time=batch_time,
       data_time=data_time, loss=losses, iou=ious, loss_extra=losses_extra, iou_extra=ious_extra), flush=True)
 
-  print('Finished Train Epoch {} Loss {losses.avg:.5f} Loss Extra {losses_extra.avg: .5f} IOU {iou.avg: .5f}'.
+  print('Finished Train Epoch {} Loss {losses.avg:.5f} Loss Extra {losses_extra.avg} IOU {iou.avg: .5f}'.
         format(epoch, losses=losses, losses_extra=losses_extra, iou=ious), flush=True)
   return losses.avg, ious.avg
 

@@ -6,8 +6,8 @@ import numpy as np
 import torch
 from PIL import Image
 from apex import amp
-from tensorboardX import SummaryWriter
 from torch.utils.data import DataLoader, RandomSampler
+from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
 
 from Forward import forward

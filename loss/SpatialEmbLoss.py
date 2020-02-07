@@ -22,7 +22,7 @@ class SpatioTemporalEmbLoss(nn.Module):
         self.to_center = to_center and embedding_size == 3
         self.n_sigma = n_sigma
         self.foreground_weight = foreground_weight
-        assert embedding_size >= 3
+        assert embedding_size == 1 or embedding_size % 3 == 0
         self.embedding_size = embedding_size
 
         # coordinate map
@@ -43,14 +43,15 @@ class SpatioTemporalEmbLoss(nn.Module):
 
         xyzm_s = self.xyzm[:, 0:tw, 0:height, 0:width].contiguous() # 3 x t x h x w
         if self.embedding_size > 3:
-            xyzm_s = torch.cat((xyzm_s, torch.zeros(self.embedding_size - 3, tw, height, width)), dim=0)
+            xyzm_s = torch.cat((xyzm_s, torch.zeros(self.embedding_size - 3, tw, height, width,
+                                                    device=prediction.device)), dim=0)
 
         loss = 0
 
         for b in range(0, batch_size):
 
             emb = torch.tanh(prediction[b, 0:self.embedding_size]) # e x t x h x w
-            spatial_emb = emb[0:3] + xyzm_s  # e x t x h x w
+            spatial_emb = emb + xyzm_s  # e x t x h x w
             sigma = prediction[b, self.embedding_size:self.embedding_size+self.n_sigma]  # n_sigma x t x h x w
             seed_map = torch.sigmoid(prediction[b, self.embedding_size+self.n_sigma:self.embedding_size+self.n_sigma + 1])  # 1 x t x h x w
 
@@ -117,13 +118,13 @@ class SpatioTemporalEmbLoss(nn.Module):
 
                 obj_count += 1
 
-            instance_loss = torch.stack(instance_loss).sum(dim=0)
-            var_loss = torch.stack(var_loss).sum(dim=0)
+            instance_loss = torch.stack(instance_loss).sum(dim=0) if len(instance_loss) > 0 else 0
+            var_loss = torch.stack(var_loss).sum(dim=0) if len(var_loss) > 0 else 0
             if obj_count > 0:
                 instance_loss /= obj_count
                 var_loss /= obj_count
 
-            seed_loss = torch.stack(seed_loss).sum(dim=0) / (height * width)
+            seed_loss = torch.stack(seed_loss).sum(dim=0) / (height * width) if len(seed_loss) > 0 else 0
 
             loss += w_inst * instance_loss + w_var * var_loss + \
                     w_seed * seed_loss
@@ -143,7 +144,7 @@ class SpatioTemporalLossWithFloatingCentre(nn.Module):
         self.to_center = to_center and embedding_size == 3
         self.n_sigma = n_sigma
         self.foreground_weight = foreground_weight
-        assert embedding_size >= 3
+        assert embedding_size % 3 == 0
         self.embedding_size = embedding_size
 
         # coordinate map
@@ -246,13 +247,13 @@ class SpatioTemporalLossWithFloatingCentre(nn.Module):
 
                 obj_count += 1
 
-            instance_loss = torch.stack(instance_loss).sum(dim=0)
-            var_loss = torch.stack(var_loss).sum(dim=0)
+            instance_loss = torch.stack(instance_loss).sum(dim=0) if len(instance_loss) > 0 else 0
+            var_loss = torch.stack(var_loss).sum(dim=0) if len(var_loss) > 0 else 0
             if obj_count > 0:
                 instance_loss /= obj_count
                 var_loss /= obj_count
 
-            seed_loss = torch.stack(seed_loss).sum(dim=0) / (height * width)
+            seed_loss = torch.stack(seed_loss).sum(dim=0) / (height * width) if len(seed_loss) > 0 else 0
 
             loss += w_inst * instance_loss + w_var * var_loss + w_seed * seed_loss
 
@@ -271,7 +272,7 @@ class CovarianceLoss(nn.Module):
         self.to_center = to_center and embedding_size == 3
         self.n_sigma = n_sigma
         self.foreground_weight = foreground_weight
-        assert embedding_size >= 3
+        assert embedding_size >= 3 and n_sigma == 6
         self.embedding_size = embedding_size
 
         # coordinate map
@@ -319,8 +320,8 @@ class CovarianceLoss(nn.Module):
             # regress bg to zero
             bg_mask = instance == 0
             if bg_mask.sum() > 0:
-                seed_loss += torch.sum(
-                    torch.pow(seed_map[bg_mask] - 0, 2))
+                seed_loss += [torch.sum(
+                    torch.pow(seed_map[bg_mask] - 0, 2))]
 
             for id in instance_ids:
 
@@ -373,13 +374,13 @@ class CovarianceLoss(nn.Module):
 
                 obj_count += 1
 
-            instance_loss = torch.stack(instance_loss).sum(dim=0)
-            var_loss = torch.stack(var_loss).sum(dim=0)
+            instance_loss = torch.stack(instance_loss).sum(dim=0) if len(instance_loss) > 0 else 0
+            var_loss = torch.stack(var_loss).sum(dim=0) if len(var_loss) > 0 else 0
             if obj_count > 0:
                 instance_loss /= obj_count
                 var_loss /= obj_count
 
-            seed_loss = torch.stack(seed_loss).sum(dim=0)
+            seed_loss = torch.stack(seed_loss).sum(dim=0) if len(seed_loss) > 0 else 0
             seed_loss = seed_loss / (height * width)
 
             loss += w_inst * instance_loss + w_var * var_loss + w_seed * seed_loss

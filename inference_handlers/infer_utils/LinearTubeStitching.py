@@ -28,7 +28,7 @@ def get_best_overlap(ref_tube, curr_tube):
 
   for obj_id in unassigned_objects:
     row_ind= np.append(row_ind, [obj_id])
-    if len(cost) > 0 and np.min(cost[obj_id]) < THRESH:
+    if len(cost) > 0 and obj_id < len(cost) and np.min(cost[obj_id]) < THRESH:
       ref_id = np.argmin(cost[obj_id])
     elif obj_id not in col_ind:
       ref_id = obj_id
