@@ -64,6 +64,7 @@ class DecoderEmbedding(Decoder3d):
     self.RF4 = Refine3dConvTranspose(1024, 256)
     self.RF3 = Refine3dConvTranspose(512, 256)
     self.RF2 = Refine3dConvTranspose(256, 256)
+    # self.pred2 = nn.Conv3d(256, n_classes, kernel_size=3, padding=1, stride=1, bias=False)
 
 
 class DecoderLight(Decoder3d):

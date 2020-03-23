@@ -1,8 +1,0 @@
-{
-"model": "davis_scribble_forward",
-"DELTA_VAR": 0.02,
-"DELTA_DISTANCE": 0.5,
-"W_VAR_LOSS": 0.2,
-"W_DISTANCE_LOSS": 0.8,
-"W_REGULARIZATION_LOSS": 0.001
-}
