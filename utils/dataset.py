@@ -1,4 +1,5 @@
-from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT, YOUTUBEVIS_ROOT, MAPILLARY_ROOT, KITTI_ROOT
+from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT, YOUTUBEVIS_ROOT, MAPILLARY_ROOT, KITTI_ROOT, \
+  FBMS_ROOT
 
 
 def get_dataset(args):
@@ -91,6 +92,10 @@ def get_dataset(args):
     from datasets.mapillary.COCOMapillary import COCOMapillary
     trainset = COCOMapillary(is_train=True, crop_size=args.crop_size,
                              resize_mode=args.resize_mode, temporal_window=args.tw, min_size=args.min_size)
+  elif args.train_dataset == "fbms":
+    from datasets.FBMS import FBMSDataset
+    trainset = FBMSDataset(FBMS_ROOT, is_train=True, crop_size=args.crop_size,
+                             resize_mode=args.resize_mode, temporal_window=args.tw)
 
   # Validation dataset
   if args.test_dataset == "coco":
@@ -164,6 +169,10 @@ def get_dataset(args):
     testset = YoutubeVISDataset(YOUTUBEVIS_ROOT, imset='valid', is_train=False,
                                  random_instance=False, crop_size=args.crop_size_eval,
                                  resize_mode=args.resize_mode_eval, temporal_window=args.tw, num_classes=args.n_classes)
+  elif args.test_dataset == "fbms":
+    from datasets.FBMS import FBMSDataset
+    testset = FBMSDataset(FBMS_ROOT, is_train=False, crop_size=args.crop_size_eval,
+                             resize_mode=args.resize_mode, temporal_window=args.tw)
 
   if 'infer' in args.task:
     if 'davis_proposal_guidance' in args.test_dataset:

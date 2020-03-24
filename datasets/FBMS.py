@@ -1,5 +1,7 @@
 import glob
 import os
+import random
+
 import numpy as np
 from PIL import Image
 
@@ -22,6 +24,15 @@ class FBMSDataset(DAVIS):
         self.mask_dir = os.path.join(root, subset, 'GroundTruth')
         self.image_dir = os.path.join(root, subset)
         return self.image_dir
+
+    def set_video_id(self, video):
+        self.current_video = video
+        self.start_index = self.get_start_index(video)
+        self.img_list = list(glob.glob(os.path.join(self.image_dir, self.current_video, '*.jpg')))
+        self.img_list.sort()
+        # instance_ids = list(range(self.num_objects[video] + 1))
+        # instance_ids.remove(0)
+        # self.random_instance_ids[video] = random.choice(instance_ids)
 
     def create_img_list(self, _imset_f):
         videos = glob.glob(self.image_dir + "/*")
@@ -48,6 +59,22 @@ class FBMSDataset(DAVIS):
         tensors_resized = resize({"image": raw_frames, "mask": raw_masks},
                                  self.resize_mode, shape)
         return tensors_resized["image"] / 255.0, tensors_resized["mask"], mask_void
+
+    def get_support_indices(self, index, sequence):
+        # index should be start index of the clip
+        if self.is_train:
+            index_range = np.arange(index, min(self.num_frames[sequence],
+                                               (index + max(self.max_temporal_gap, self.temporal_window))))
+        else:
+            index_range = np.arange(index,
+                                    min(self.num_frames[sequence], (index + self.temporal_window)))
+
+        support_indices = np.random.choice(index_range, min(self.temporal_window, len(index_range)), replace=False)
+        support_indices = np.sort(np.append(support_indices, np.repeat([index],
+                                                                       self.temporal_window - len(support_indices))))
+
+        # print(support_indices)
+        return support_indices
 
     def __getitem__(self, item):
         img_file = self.img_list[item]
@@ -93,7 +120,6 @@ class FBMSDataset(DAVIS):
             # th_pc.append(proposal_categories[np.newaxis])
             # th_ps.append(proposal_scores[np.newaxis])
 
-        target = th_masks[-1][0]
         th_masks_raw = th_masks.copy()
         th_masks[-1] = np.zeros_like(th_masks[-1])
         masks_guidance = np.concatenate(th_masks, axis=1)
@@ -102,16 +128,19 @@ class FBMSDataset(DAVIS):
         #   masks_guidance[0, -2] = np.zeros(masks_guidance.shape[2:])
 
         # Can be used for setting proposals if desired, but for now it isn't neccessary and will be ignored
-        return {'images': np.concatenate(th_frames, axis=1), 'masks_guidance': masks_guidance, 'info': info,
-                'target': target, "proposals": target,
-                "raw_proposals": target,
-                'raw_masks': np.concatenate(th_masks_raw, axis=1)}
+        return {'images': np.concatenate(th_frames, axis=1),'info': info,
+                'target': masks_guidance, "proposals": masks_guidance,
+                "raw_proposals": masks_guidance,
+                'raw_masks': np.concatenate(th_masks_raw, axis=1),
+                'target_extra': {'similarity_ref': masks_guidance,
+                                  'similarity_raw_mask': masks_guidance, 'sem_seg':masks_guidance}}
 
 
 if __name__ == '__main__':
-    dataset = FBMSDataset(root="/home/sabari/vision-data/fbms/")
-    result = dataset.__getitem__(10)
-    print("image range: {}\nfgmask: {}".format(
-                                                                              result['images'].min(),
-                                                                              result['images'].max()),
-                                                                          np.unique(result['target']))
+    dataset = FBMSDataset(root="/globalwork/data/fbms/")
+    result = dataset.__getitem__(0)
+    print("image range: {}\nfgmask: {}\nsupport: {}".format(
+        (result['images'].min(),
+        result['images'].max()),
+        (np.unique(result['target']), result['target'].shape),
+        result['info']['support_indices']))
