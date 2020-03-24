@@ -2,7 +2,6 @@ import inspect
 
 import numpy as np
 import torch
-from apex.parallel import ReduceOp
 from torch.distributed import all_reduce
 from network.EmbeddingNetwork import Resnet3dSpatialEmbedding
 from network.models import BaseNetwork
@@ -134,6 +133,7 @@ def cleanup_env():
   torch.distributed.destroy_process_group()
 
 def reduce_tensor(tensor, args):
+  from apex.parallel import ReduceOp
   rt = tensor.clone()
   all_reduce(rt, op=ReduceOp.SUM)
   rt /= args.world_size
