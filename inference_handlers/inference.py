@@ -15,5 +15,8 @@ def infer(args, testset, model, criterion, writer, distributed = False):
   elif 'infer_yvis' in task.lower():
     from inference_handlers.YVIS import infer_yvis
     infer_yvis(testset, model, criterion, writer, args, distributed=distributed)
+  elif 'infer_fbms' in task.lower():
+    from inference_handlers.FBMS import infer_fbms
+    infer_fbms(testset, model, criterion, writer, args, distributed=distributed)
   else:
     raise ValueError("Unknown inference task {}".format(task))
