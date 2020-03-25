@@ -51,12 +51,12 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
         clip_frames = info['support_indices'][0].data.cpu().numpy()
 
         assert batch_size == 1
-        for f in clip_frames:
+        for i, f in enumerate(clip_frames):
           if f in all_semantic_pred:
             # all_semantic_pred[clip_frames] += [torch.argmax(pred_mask, dim=1).data.cpu().int()[0]]
-            all_semantic_pred[f] += [pred_mask[0, f].data.cpu().int()]
+            all_semantic_pred[f] += [pred_mask[0, :, i].data.cpu().float()]
           else:
-            all_semantic_pred[f] = [pred_mask[0, f].data.cpu().int()]
+            all_semantic_pred[f] = [pred_mask[0, :, i].data.cpu().float()]
 
 
       ious.update(ious_per_video.avg)
@@ -71,9 +71,9 @@ def save_results(pred, info, results_path, palette):
   results_path = os.path.join(results_path, info['name'][0])
   # pred = pred.data.cpu().numpy().astype(np.uint8)
   (lh, uh), (lw, uw) = info['pad']
-  h, w = pred.shape[-2:]
   for f in pred.keys():
     M = torch.argmax(torch.stack(pred[f]).mean(dim=0), dim=0)
+    h, w = M.shape[-2:]
     M = M[lh[0]:h-uh[0], lw[0]:w-uw[0]]
     shape = info['shape480p'] if 'shape480p' in info else info['shape']
     img_M = Image.fromarray(imresize(M, shape, interp='nearest'))
