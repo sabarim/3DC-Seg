@@ -33,7 +33,7 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
       test_sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=False) if distributed else None
       dataloader = DataLoader(dataset, batch_size=1, num_workers=1, shuffle=False, sampler=test_sampler, pin_memory=True)
 
-      all_semantic_pred = None
+      all_semantic_pred = {}
       for iter, input_dict in enumerate(dataloader):
         if not args.exhaustive and (iter % (args.tw - OVERLAPS)) != 0:
           continue
@@ -51,7 +51,12 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
         clip_frames = info['support_indices'][0].data.cpu().numpy()
 
         assert batch_size == 1
-        all_semantic_pred[clip_frames] = torch.argmax(pred_mask, dim=1).data.cpu().int()[0]
+        for f in clip_frames:
+          if f in all_semantic_pred:
+            # all_semantic_pred[clip_frames] += [torch.argmax(pred_mask, dim=1).data.cpu().int()[0]]
+            all_semantic_pred[f] += [pred_mask[0, f].data.cpu().int()]
+          else:
+            all_semantic_pred[f] = [pred_mask[0, f].data.cpu().int()]
 
 
       ious.update(ious_per_video.avg)
@@ -64,11 +69,12 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
 
 def save_results(pred, info, results_path, palette):
   results_path = os.path.join(results_path, info['name'][0])
-  pred = pred.data.cpu().numpy().astype(np.uint8)
+  # pred = pred.data.cpu().numpy().astype(np.uint8)
   (lh, uh), (lw, uw) = info['pad']
   h, w = pred.shape[-2:]
-  for f in range(1, len(pred) + 1):
-    M = pred[f, lh[0]:h-uh[0], lw[0]:w-uw[0]]
+  for f in pred.keys():
+    M = torch.argmax(torch.stack(pred[f]).mean(dim=0), dim=0)
+    M = M[lh[0]:h-uh[0], lw[0]:w-uw[0]]
     shape = info['shape480p'] if 'shape480p' in info else info['shape']
     img_M = Image.fromarray(imresize(M, shape, interp='nearest'))
     img_M.putpalette(palette)
