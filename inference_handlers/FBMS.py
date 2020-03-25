@@ -1,9 +1,11 @@
 import os
+import pickle
 
 import numpy as np
 import torch
 from PIL import Image
 from scipy.misc import imresize
+from sklearn.metrics import precision_recall_curve
 from torch.nn import functional as F
 # cluster module
 from torch.utils.data import DataLoader
@@ -15,8 +17,7 @@ from utils.Constants import DAVIS_ROOT, PRED_LOGITS, PRED_SEM_SEG
 
 cluster = Cluster()
 # number of overlapping frames for stitching
-OVERLAPS = 3
-SEED_THRESHOLD = 0.8
+OVERLAPS = 7
 
 
 def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
@@ -81,3 +82,5 @@ def save_results(pred, info, results_path, palette):
     if not os.path.exists(results_path):
       os.makedirs(results_path)
     img_M.save(os.path.join(results_path, '{:05d}.png'.format(f)))
+    prob = torch.stack(pred[f]).mean(dim=0)[-1]
+    pickle.dump(prob, open('{:05d}.pkl'.format(f)))
