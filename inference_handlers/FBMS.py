@@ -40,7 +40,7 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
         info = input_dict['info']
         if iter == 0:
           shape = tuple(info['num_frames'].int().numpy(), ) + tuple(input_dict['images'].shape[-2:], )
-          all_semantic_pred = torch.zeros(shape).int()
+          # all_semantic_pred = torch.zeros(shape).int()
 
         batch_size = input_dict['images'].shape[0]
         input, input_var, loss, pred_dict = forward(criterion, input_dict, ious, model, args)
