@@ -14,6 +14,7 @@ class FBMSDataset(DAVIS):
                  max_temporal_gap=8, resize_mode=ResizeMode.FIXED_SIZE):
         # maintain a dict to store the index length for videos. They are different for fbms
         self.index_length = {}
+        self.gt_frames = {}
         super(FBMSDataset, self).__init__(root=root, is_train=is_train, crop_size=crop_size,
                                           temporal_window=temporal_window,
                                           min_temporal_gap=min_temporal_gap, max_temporal_gap=max_temporal_gap,
@@ -46,6 +47,8 @@ class FBMSDataset(DAVIS):
             self.num_objects[sequence] = 0
             self.shape[sequence] = np.shape(np.array(Image.open(vid_files[0]).convert('RGB')))[:2]
             self.img_list += list(glob.glob(os.path.join(self.image_dir, sequence, '*.jpg')))
+            self.gt_frames[sequence] = [int(f.split("/")[-1].split("_")[-1].split(".")[0])
+                                     for f in glob.glob(os.path.join(self.mask_dir, sequence, '*.png'))]
         self.reference_list = self.img_list
 
     def read_frame(self, shape, video, f, instance_id=None, support_indices=None):
@@ -140,7 +143,7 @@ class FBMSDataset(DAVIS):
                 'target': masks_guidance, "proposals": masks_guidance,
                 "raw_proposals": masks_guidance,
                 'raw_masks': np.concatenate(th_masks_raw, axis=1),
-                'masks_void': mask_void,
+                'masks_void': masks_void,
                 'target_extra': {'similarity_ref': masks_guidance,
                                   'similarity_raw_mask': masks_guidance, 'sem_seg':masks_guidance}}
 

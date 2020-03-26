@@ -17,12 +17,12 @@ from utils.Constants import DAVIS_ROOT, PRED_LOGITS, PRED_SEM_SEG
 
 cluster = Cluster()
 # number of overlapping frames for stitching
-OVERLAPS = 7
+OVERLAPS = 3
 
 
 def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
-  losses = AverageMeter()
-  ious = AverageMeter()
+  Fs = AverageMeter()
+  maes = AverageMeter()
   # switch to evaluate mode
   model.eval()
   palette = Image.open(DAVIS_ROOT + '/Annotations_unsupervised/480p/bear/00000.png').getpalette()
@@ -47,7 +47,6 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
 
         batch_size = input_dict['images'].shape[0]
         input, input_var, loss, pred_dict = forward(criterion, input_dict, ious, model, args)
-        losses.update(loss)
         pred_mask = F.softmax(pred_dict[PRED_LOGITS], dim=1)
         pred_multi = F.softmax(pred_dict[PRED_SEM_SEG], dim=1) if PRED_SEM_SEG in pred_dict else None
 
@@ -61,19 +60,23 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
             all_semantic_pred[f] += [pred_mask[0, :, i].data.cpu().float()]
           else:
             all_semantic_pred[f] = [pred_mask[0, :, i].data.cpu().float()]
-            all_targets[f] = [target[0, i].data.cpu().float()]
+            if f in info['gt_frames']:
+              all_targets[f] = [target[0, i].data.cpu().float()]
 
 
-      ious.update(ious_per_video.avg)
-      save_results(all_semantic_pred, all_targets, info, os.path.join('results', args.network_name), palette)
-      print('Sequence {}\t IOU {iou}'.format(input_dict['info']['name'], iou=ious_per_video.avg))
 
-  print('Finished Inference Loss {losses.avg:.5f} IOU {iou.avg: 5f}'
-        .format(losses=losses, iou=ious))
+      F, mae = save_results(all_semantic_pred, all_targets, info, os.path.join('results', args.network_name), palette)
+      Fs.update(F)
+      maes.update(mae)
+      print('Sequence {}: F_max {}  MAE {}'.format(input_dict['info']['name'], F, mae))
+
+  print('Finished Inference F measure: {Fs.avg:.5f} MAE: {maes.avg: 5f}'
+        .format(Fs=Fs, maes=maes))
 
 
 def save_results(pred, targets, info, results_path, palette):
   results_path = os.path.join(results_path, info['name'][0])
+  pred_for_eval = []
   # pred = pred.data.cpu().numpy().astype(np.uint8)
   (lh, uh), (lw, uw) = info['pad']
   for f in pred.keys():
@@ -87,4 +90,16 @@ def save_results(pred, targets, info, results_path, palette):
       os.makedirs(results_path)
     img_M.save(os.path.join(results_path, '{:05d}.png'.format(f)))
     prob = torch.stack(pred[f]).mean(dim=0)[-1]
-    pickle.dump(prob, open('{:05d}.pkl'.format(f)))
+    pickle.dump(prob, open('{:05d}.pkl'.format(f), 'wb'))
+    if f in targets:
+      pred_for_eval += [torch.stack(pred[f]).mean(dim=0)]
+
+  assert len(targets.values()) == len(pred_for_eval)
+  pred_for_F = np.stack(torch.argmax(pred_for_eval, dim=0)).flatten()
+  pred_for_mae = np.stack(pred_for_eval[-1]).flatten()
+  gt = np.stack(targets.values()).flatten()
+  precision, recall, _= precision_recall_curve(gt.data.cpu().numpy(), pred_for_F.data.cpu().numpy())
+  Fmax = 2 * (precision * recall) / (precision + recall)
+  mae = np.mean(abs(pred_for_mae - gt))
+
+  return Fmax, mae
