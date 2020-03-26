@@ -20,8 +20,9 @@ class FBMSDataset(DAVIS):
                                           resize_mode=resize_mode)
 
     def set_paths(self, imset, resolution, root):
+        subset = "train" if self.is_train else "test"
+        self.mask_dir = os.path.join(root, 'inst', subset)
         subset = "Trainingset" if self.is_train else "Testset"
-        self.mask_dir = os.path.join(root, subset, 'GroundTruth')
         self.image_dir = os.path.join(root, subset)
         return self.image_dir
 
@@ -51,10 +52,16 @@ class FBMSDataset(DAVIS):
         # use a blend of both full random instance as well as the full object
         l = self.index_length[video]
         img_file = os.path.join(self.image_dir, video, video + ('_{:0' + str(l) + 'd}.jpg').format(f))
+        mask_file = os.path.join(self.mask_dir, video, video + ('_{:0' + str(l) + 'd}.png').format(f))
         raw_frames = np.array(Image.open(img_file).convert('RGB')) / 255.
-        raw_mask = np.zeros(raw_frames.shape[:2])
-        mask_void = (raw_mask == 255).astype(np.uint8)
-        raw_mask[raw_mask == 255] = 0
+        if os.path.exists(mask_file):
+            raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
+            mask_void = (raw_mask == 255).astype(np.uint8)
+            raw_mask[raw_mask == 255] = 0
+        else:
+            raw_mask = np.zeros((raw_frames.shape[:2])).astype(np.uint8)
+            mask_void = (np.ones_like(raw_mask) * 255).astype(np.uint8)
+
         raw_masks = (raw_mask == instance_id).astype(np.uint8) if instance_id is not None else raw_mask
         tensors_resized = resize({"image": raw_frames, "mask": raw_masks},
                                  self.resize_mode, shape)
@@ -123,6 +130,7 @@ class FBMSDataset(DAVIS):
         th_masks_raw = th_masks.copy()
         th_masks[-1] = np.zeros_like(th_masks[-1])
         masks_guidance = np.concatenate(th_masks, axis=1)
+        masks_void = np.concatenate(th_mask_void, axis=1)
         # remove masks with some probability to make sure that the network can focus on intermediate frames
         # if self.is_train and np.random.choice([True, False], 1, p=[0.15,0.85]):
         #   masks_guidance[0, -2] = np.zeros(masks_guidance.shape[2:])
@@ -132,6 +140,7 @@ class FBMSDataset(DAVIS):
                 'target': masks_guidance, "proposals": masks_guidance,
                 "raw_proposals": masks_guidance,
                 'raw_masks': np.concatenate(th_masks_raw, axis=1),
+                'masks_void': mask_void,
                 'target_extra': {'similarity_ref': masks_guidance,
                                   'similarity_raw_mask': masks_guidance, 'sem_seg':masks_guidance}}
 

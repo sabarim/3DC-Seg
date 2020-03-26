@@ -35,10 +35,12 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
       dataloader = DataLoader(dataset, batch_size=1, num_workers=1, shuffle=False, sampler=test_sampler, pin_memory=True)
 
       all_semantic_pred = {}
+      all_targets = {}
       for iter, input_dict in enumerate(dataloader):
         if not args.exhaustive and (iter % (args.tw - OVERLAPS)) != 0:
           continue
         info = input_dict['info']
+        target = input_dict['target']
         if iter == 0:
           shape = tuple(info['num_frames'].int().numpy(), ) + tuple(input_dict['images'].shape[-2:], )
           # all_semantic_pred = torch.zeros(shape).int()
@@ -50,6 +52,7 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
         pred_multi = F.softmax(pred_dict[PRED_SEM_SEG], dim=1) if PRED_SEM_SEG in pred_dict else None
 
         clip_frames = info['support_indices'][0].data.cpu().numpy()
+        ious_per_video.update()
 
         assert batch_size == 1
         for i, f in enumerate(clip_frames):
@@ -58,17 +61,18 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
             all_semantic_pred[f] += [pred_mask[0, :, i].data.cpu().float()]
           else:
             all_semantic_pred[f] = [pred_mask[0, :, i].data.cpu().float()]
+            all_targets[f] = [target[0, i].data.cpu().float()]
 
 
       ious.update(ious_per_video.avg)
-      save_results(all_semantic_pred, info, os.path.join('results', args.network_name), palette)
+      save_results(all_semantic_pred, all_targets, info, os.path.join('results', args.network_name), palette)
       print('Sequence {}\t IOU {iou}'.format(input_dict['info']['name'], iou=ious_per_video.avg))
 
   print('Finished Inference Loss {losses.avg:.5f} IOU {iou.avg: 5f}'
         .format(losses=losses, iou=ious))
 
 
-def save_results(pred, info, results_path, palette):
+def save_results(pred, targets, info, results_path, palette):
   results_path = os.path.join(results_path, info['name'][0])
   # pred = pred.data.cpu().numpy().astype(np.uint8)
   (lh, uh), (lw, uw) = info['pad']
