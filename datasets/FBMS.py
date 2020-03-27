@@ -59,6 +59,7 @@ class FBMSDataset(DAVIS):
         raw_frames = np.array(Image.open(img_file).convert('RGB')) / 255.
         if os.path.exists(mask_file):
             raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
+            raw_mask = (raw_mask!=0).astype(np.uint8)
             mask_void = (raw_mask == 255).astype(np.uint8)
             raw_mask[raw_mask == 255] = 0
         else:
@@ -95,6 +96,7 @@ class FBMSDataset(DAVIS):
         num_objects = self.num_objects[sequence]
         info['num_objects'] = num_objects
         info['shape'] = self.shape[sequence]
+        info['gt_frames'] = self.gt_frames[sequence]
         index = int(os.path.splitext(os.path.basename(img_file))[0].split("_")[-1])
 
         # retain original shape
