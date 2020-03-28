@@ -151,7 +151,7 @@ class FBMSDataset(DAVIS):
 
 
 if __name__ == '__main__':
-    dataset = FBMSDataset(root="/globalwork/data/fbms/")
+    dataset = FBMSDataset(root="/home/sabari/vision-data/", crop_size=480, resize_mode=ResizeMode.RESIZE_SHORT_EDGE)
     result = dataset.__getitem__(0)
     print("image range: {}\nfgmask: {}\nsupport: {}".format(
         (result['images'].min(),

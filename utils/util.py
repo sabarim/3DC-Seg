@@ -3,6 +3,7 @@ import inspect
 import numpy as np
 import torch
 from torch.distributed import all_reduce
+import torch.distributed as dist
 from network.EmbeddingNetwork import Resnet3dSpatialEmbedding
 from network.models import BaseNetwork
 
@@ -80,7 +81,7 @@ def get_lr_schedulers(optimiser, args, last_epoch=-1):
     lr_schedulers += [torch.optim.lr_scheduler.ExponentialLR(optimiser, gamma=args.lr_decay, last_epoch=last_epoch)]
   if 'step' in args.lr_schedulers:
     lr_schedulers += [torch.optim.lr_scheduler.MultiStepLR(optimiser, milestones=[15, 20],
-                                                          last_epoch=last_epoch)]
+                                                           last_epoch=last_epoch)]
   return lr_schedulers
 
 
@@ -122,6 +123,32 @@ def init_torch_distributed():
     'nccl',
     init_method='env://',
   )
+
+def get_rank():
+  if not dist.is_available():
+    return 0
+  if not dist.is_initialized():
+    return 0
+  return dist.get_rank()
+
+
+def is_main_process():
+  return get_rank() == 0
+
+
+def synchronize():
+  """
+  Helper function to synchronize (barrier) among all processes when
+  using distributed training
+  """
+  if not dist.is_available():
+    return
+  if not dist.is_initialized():
+    return
+  world_size = dist.get_world_size()
+  if world_size == 1:
+    return
+  dist.barrier()
 
 
 def cleanup_env():

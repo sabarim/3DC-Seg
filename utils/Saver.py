@@ -1,3 +1,4 @@
+import glob
 import os
 from collections import OrderedDict
 import numpy as np
@@ -5,6 +6,7 @@ import torch
 from PIL import Image
 import utils.Constants as Constants
 from utils.util import ToLabel
+
 
 def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
     start_epoch = 0
@@ -17,7 +19,15 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
     # load saved model if specified
     if loadepoch is not None:
       print('Loading checkpoint {}@Epoch {}{}...'.format(Constants.font.BOLD, loadepoch, Constants.font.END))
-      if loadepoch == '0':
+      # load checkpoint file if it exists -- > file  format checkpoint_<iteration>
+      chkpts = glob.glob(model_dir + "/*.pth")
+      chkpts = [c for c in chkpts if c.startswith("checkpoint_")]
+      if len(chkpts) > 0:
+          chkpts.sort()
+          load_name = chkpts[-1]
+          checkpoint = torch.load(load_name)
+          start_epoch = checkpoint['epoch'] + 1
+      elif loadepoch == '0':
         # transform, checkpoint provided by RGMP
         load_name = Constants.MODEL_ROOT + 'resnet-50-kinetics.pth'
         state = model.state_dict()
