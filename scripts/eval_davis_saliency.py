@@ -16,15 +16,9 @@ def main(args):
     F = []
     maes = []
     
-    if args.dataset == "FBMS":
-        gt_seqs = glob.glob(gt_path + "/*")
-    elif args.dataset == "DAVIS":
-        assert args.imageset is not None
-        imageset = open(args.imageset)
-        gt_seqs = [os.path.join(gt_path, s) for s in imageset.readlines()]
-    else:
-        print("Unknown dataset")
-        return
+    assert args.imageset is not None
+    imageset = open(args.imageset)
+    gt_seqs = [os.path.join(gt_path, s) for s in imageset.readlines()]
 #    gt_seqs = glob.glob(gt_path + "/*")
     result_seqs = glob.glob(results_path + "/*")
     if len(result_seqs) < len(gt_seqs):
@@ -37,9 +31,9 @@ def main(args):
         seq_name = seq.split("/")[-1]
         result_seq_path = os.path.join(results_path, seq_name)
         gt_files = glob.glob(seq + "/*.png")
-        f_num_length = len(os.path.basename(gt_files[0]).split("_")[-1].split(".")[0])
+        f_num_length = 5
         if not os.path.exists(result_seq_path):
-            print("Sequence {} does not exist in the results path.".format(seq_name))
+            print("Sequence {} does not exist in the results path {}.".format(seq_name, result_seq_path))
             continue
         for f in glob.glob(os.path.join(result_seq_path, "*.png")):
             f_name = f.split("/")[-1]
@@ -75,10 +69,7 @@ if __name__ == '__main__':
     parser.add_argument('--gt_path', dest='gt_path',
                         help='ground truth path',
                         type=str, required=True)
-    parser.add_argument('--dataset', dest='dataset',
-                        help='dataset to evaluate',
-                        type=str, required=True)
     parser.add_argument('--imageset', dest='imageset',
-                        help='davis imageset file',
-                        type=str, required=False, default=None)
+                        help='ground truth path',
+                        type=str, required=True)
     main(parser.parse_args())
