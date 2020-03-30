@@ -157,6 +157,7 @@ def cleanup_env():
 
   :return:
   """
+  print("Destroying distributed processes.")
   torch.distributed.destroy_process_group()
 
 def reduce_tensor(tensor, args):

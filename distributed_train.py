@@ -1,6 +1,6 @@
 import os
 import time
-
+import signal
 import apex
 import torch
 from apex import amp
@@ -292,28 +292,44 @@ class Trainer:
         else:
             raise ValueError("Unknown task {}".format(args.task))
 
-    def backup_session(self):
-        save_name = '{}/{}_{}.pth'.format(self.model_dir, "checkpoint", self.iteration)
-        save_checkpoint(self.epoch, self.ious.avg, self.losses.avg, self.model, self.optimiser, save_name, is_train=False,
-                        scheduler=self.lr_schedulers)
+    def backup_session(self, signalNumber, _):
+        if is_main_process():
+            save_name = '{}/{}_{}.pth'.format(self.model_dir, "checkpoint", self.iteration)
+            print("Received signal {}. \nSaving model to {}".format(signalNumber, save_name))
+            save_checkpoint(self.epoch, self.ious.avg, self.losses.avg, self.model, self.optimiser, save_name, is_train=False,
+                            scheduler=self.lr_schedulers)
+
+
+def register_interrupt_signals(trainer):
+    signal.signal(signal.SIGHUP, trainer.backup_session)
+    signal.signal(signal.SIGINT, trainer.backup_session)
+    signal.signal(signal.SIGQUIT, trainer.backup_session)
+    signal.signal(signal.SIGILL, trainer.backup_session)
+    signal.signal(signal.SIGTRAP, trainer.backup_session)
+    signal.signal(signal.SIGABRT, trainer.backup_session)
+    signal.signal(signal.SIGBUS, trainer.backup_session)
+    signal.signal(signal.SIGKILL, trainer.backup_session)
+    signal.signal(signal.SIGALRM, trainer.backup_session)
+    signal.signal(signal.SIGTERM, trainer.backup_session)
 
 
 if __name__ == '__main__':
     args = parse_args()
     trainer = Trainer(args)
+    register_interrupt_signals(trainer)
     try:
         trainer.start()
     except RuntimeError as _:
         if is_main_process():
             print("Interrupt signal received. Saving checkpoint...")
-            trainer.backup_session()
+            trainer.backup_session(signal.SIGBREAK, None)
             synchronize()
         exit(1)
     except Exception as err:
         if is_main_process():
             print("Exception occurred. Saving checkpoint...")
             print(err)
-            trainer.backup_session()
+            trainer.backup_session(signal.SIGBREAK, None)
         raise err
 
     cleanup_env()
