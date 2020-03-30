@@ -172,7 +172,7 @@ def get_dataset(args):
   elif args.test_dataset == "fbms":
     from datasets.FBMS import FBMSDataset
     testset = FBMSDataset(FBMS_ROOT, is_train=False, crop_size=args.crop_size_eval,
-                             resize_mode=args.resize_mode, temporal_window=args.tw)
+                             resize_mode=args.resize_mode_eval, temporal_window=args.tw)
 
   if 'infer' in args.task:
     if 'davis_proposal_guidance' in args.test_dataset:

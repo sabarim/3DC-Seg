@@ -15,6 +15,8 @@ def format_pred(pred):
   """
   if type(pred) is not list:
     f_dict = {('%s' % PRED_LOGITS): pred}
+  elif len(pred) == 1:
+    f_dict = {PRED_LOGITS: pred[0]}
   elif len(pred) == 2:
     f_dict = {PRED_LOGITS: pred[0], PRED_EMBEDDING: pred[1]}
   elif len(pred) == 3:

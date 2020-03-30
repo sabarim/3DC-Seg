@@ -1,11 +1,12 @@
 import torch
+from functools import reduce
 from torch import nn
 from torch.nn import functional as F
 from torchvision.models.segmentation import deeplabv3_resnet101, fcn_resnet101
 from network.Modules import GC3d, Refine3d
 from network.NonLocal import NONLocalBlock3D
 from network.RGMP import Encoder
-from network.Resnet3d import resnet50, resnet152_csn_ip, resnet152_csn_ir
+from network.Resnet3d import resnet50, resnet152_csn_ip, resnet152_csn_ir, resnet101
 from network.models import BaseNetwork
 # from network.r2plus1d.extract import r2plus1d_34
 
@@ -285,6 +286,23 @@ class Resnet3d(BaseNetwork):
     p = self.decoder.forward(r5, r4, r3, r2, None)
     return [p]
 
+
+class Resnet3d101(Resnet3d):
+  def __init__(self, tw=8, sample_size=112, e_dim=7, decoders=None):
+    super(Resnet3d101, self).__init__(tw=tw, sample_size=sample_size)
+    resnet = resnet101(sample_size=sample_size, sample_duration=tw)
+    self.encoder = Encoder3d(tw, sample_size, resnet=resnet)
+    decoders = [Decoder3d()] if decoders is None else decoders
+    self.decoders = nn.ModuleList()
+    for decoder in decoders:
+      self.decoders.append(decoder)
+
+  def forward(self, x, ref = None):
+    r5, r4, r3, r2 = self.encoder.forward(x, ref)
+    flatten = lambda lst: [lst] if type(lst) is torch.Tensor else reduce(torch.add, [flatten(ele) for ele in lst])
+    p = flatten([decoder.forward(r5, r4, r3, r2, None) for decoder in self.decoders])
+    # e = self.decoder_embedding.forward(r5, r4, r3, r2, None)
+    return p
 
 class SiamResnet3d(BaseNetwork):
   def __init__(self, tw=8, sample_size=112):

@@ -41,6 +41,8 @@ class Trainer:
         self.args = args
         self.iteration = 0
         self.epoch = 0
+        self. best_iou_train = 0
+        self.best_loss_train = 0
         self.losses = AverageMeter()
         self.ious = AverageMeter()
         self.losses_extra = AverageMeterDict()
@@ -70,10 +72,10 @@ class Trainer:
             torch.nn.BCEWithLogitsLoss(reduce=False)
         print("Using {} criterion", self.criterion)
 
-    def init_distributed(self, model):
+    def init_distributed(self, args):
         torch.cuda.set_device(args.local_rank)
         init_torch_distributed()
-        model = apex.parallel.convert_syncbn_model(model)
+        model = apex.parallel.convert_syncbn_model(self.model)
         model.cuda()
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
         model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval, amp_weights = \
@@ -152,7 +154,7 @@ class Trainer:
                     self.epoch, i * args.world_size * args.bs, len(self.trainloader) * args.bs * args.world_size,
                            args.world_size * args.bs / batch_time.val,
                            args.world_size * args.bs / batch_time.avg,
-                    batch_time=batch_time, loss=self.losses, iou=ious,
+                    batch_time=batch_time, loss=self.losses, iou=self.ious,
                     loss_extra=self.losses_extra, iou_extra=self.ious_extra), flush=True)
 
         if args.local_rank == 0:
@@ -170,7 +172,7 @@ class Trainer:
         losses_extra = AverageMeterDict()
         ious = AverageMeter()
         ious_extra = AverageMeter()
-
+        count=0
         # switch to evaluate mode
         self.model.eval()
 
@@ -267,22 +269,22 @@ class Trainer:
                     lr_scheduler.step(epoch)
 
                 if args.local_rank == 0:
-                    if iou_mean > best_iou_train or loss_mean < best_loss_train:
-                        if not os.path.exists(self.model_dir):
-                            os.makedirs(self.model_dir)
-                        best_iou_train = iou_mean if iou_mean > best_iou_train else best_iou_train
-                        best_loss_train = loss_mean if loss_mean < best_loss_train else best_loss_train
-                        save_name = '{}/{}.pth'.format(self.model_dir, "model_best_train")
-                        save_checkpoint(epoch, iou_mean, loss_mean, self.model, self.optimiser, save_name, is_train=True,
-                                        scheduler=None, amp=amp)
+                    # if iou_mean > self.best_iou_train or loss_mean < self.best_loss_train:
+                    if not os.path.exists(self.model_dir):
+                        os.makedirs(self.model_dir)
+                    self.best_iou_train = iou_mean if iou_mean > self.best_iou_train else self.best_iou_train
+                    self.best_loss_train = loss_mean if loss_mean < self.best_loss_train else self.best_loss_train
+                    save_name = '{}/{}.pth'.format(self.model_dir, "model_best_train")
+                    save_checkpoint(epoch, iou_mean, loss_mean, self.model, self.optimiser, save_name, is_train=True,
+                                    scheduler=None, amp=amp)
 
                 if (epoch + 1) % args.eval_epoch == 0:
                     loss_mean, iou_mean = self.eval()
-                    if iou_mean > best_iou_eval and args.local_rank == 0:
-                        best_iou_eval = iou_mean
-                        save_name = '{}/{}.pth'.format(self.model_dir, "model_best_eval")
-                        save_checkpoint(epoch, iou_mean, loss_mean, self.model, self.optimiser, save_name, is_train=False,
-                                        scheduler=self.lr_schedulers)
+                    # if iou_mean > best_iou_eval and args.local_rank == 0:
+                    best_iou_eval = iou_mean
+                    save_name = '{}/{}.pth'.format(self.model_dir, "model_best_eval")
+                    save_checkpoint(epoch, iou_mean, loss_mean, self.model, self.optimiser, save_name, is_train=False,
+                                    scheduler=self.lr_schedulers)
         elif args.task == 'eval':
             self.eval()
         elif 'infer' in args.task:

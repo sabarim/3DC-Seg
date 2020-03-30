@@ -21,18 +21,21 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
       print('Loading checkpoint {}@Epoch {}{}...'.format(Constants.font.BOLD, loadepoch, Constants.font.END))
       # load checkpoint file if it exists -- > file  format checkpoint_<iteration>
       chkpts = glob.glob(model_dir + "/*.pth")
-      chkpts = [c for c in chkpts if c.startswith("checkpoint_")]
+      chkpts = [c for c in chkpts if "checkpoint_" in c]
       if len(chkpts) > 0:
           chkpts.sort()
           load_name = chkpts[-1]
           checkpoint = torch.load(load_name)
           start_epoch = checkpoint['epoch'] + 1
-      elif loadepoch == '0':
+      elif "resnet" in  loadepoch:
         # transform, checkpoint provided by RGMP
-        load_name = Constants.MODEL_ROOT + 'resnet-50-kinetics.pth'
+        load_name = os.path.join("saved_models", '{}.pth'.format(loadepoch))
         state = model.state_dict()
-        checkpoint = torch.load(load_name)
-      if loadepoch == 'siam':
+        checkpoint = torch.load(load_name)['state_dict']
+        start_epoch = 0
+        checkpoint = {"model": OrderedDict([('encoder.' + k.lower(), v)
+                                            for k, v in checkpoint.items()]), "epoch": start_epoch}
+      elif loadepoch == 'siam':
         # transform, checkpoint provided by RGMP
         load_name2d = 'saved_models/rgmp.pth'
         load_name3d = 'saved_models/resnet-50-kinetics.pth'
