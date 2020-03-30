@@ -16,7 +16,12 @@ def main(args):
     F = []
     maes = []
 
-    gt_seqs = glob.glob(gt_path + "/*")
+    if args.dataset == "FBMS":
+        gt_seqs = glob.glob(gt_path + "/*")
+    elif args.dataset == "DAVIS":
+        assert args.imageset is not None
+        imageset = open(args.imageset)
+        gt_seqs = [os.path.join(gt_path, s) for s in imageset.readlines()]
     result_seqs = glob.glob(results_path + "/*")
     if len(result_seqs) < len(gt_seqs):
         print("WARN: The results do not have all the ground truth sequences.")
@@ -66,4 +71,10 @@ if __name__ == '__main__':
     parser.add_argument('--gt_path', dest='gt_path',
                         help='ground truth path',
                         type=str, required=True)
+    parser.add_argument('--dataset', dest='dataset',
+                        help='dataset to evaluate',
+                        type=str, required=True)
+    parser.add_argument('--imageset', dest='imageset',
+                        help='davis imageset file',
+                        type=str, required=False, default=None)
     main(parser.parse_args())
