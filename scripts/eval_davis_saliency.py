@@ -27,9 +27,9 @@ def main(args):
     gts = []
     logits = []
     for i in tqdm.tqdm(range(len(gt_seqs))):
-        seq = gt_seqs[i]
-        seq_name = seq.split("/")[-1]
-        result_seq_path = os.path.join(results_path, seq_name)
+        seq = gt_seqs[i].replace('\n', '')
+        seq_name = seq.split("/")[-1].replace('\n', '')
+        result_seq_path = os.path.join(results_path, seq_name).replace('\n', '')
         gt_files = glob.glob(seq + "/*.png")
         f_num_length = 5
         if not os.path.exists(result_seq_path):
@@ -38,11 +38,12 @@ def main(args):
         for f in glob.glob(os.path.join(result_seq_path, "*.png")):
             f_name = f.split("/")[-1]
             f_num = int(f_name.split(".")[0])
-            gt_file = os.path.join(seq, seq_name +  ('_{:0' + str(f_num_length) + 'd}.png').format(f_num))
+            gt_file = os.path.join(seq,('{:0' + str(f_num_length) + 'd}.png').format(f_num))
             if os.path.exists(gt_file):
                 preds += [np.array(Image.open(f).convert("P")).flatten()]
                 gt = np.array(Image.open(gt_file))
-                prob = np.array(pickle.load(open(f.replace('png', 'pkl'), 'rb')))
+                # prob = np.array(pickle.load(open(f.replace('png', 'pkl'), 'rb')))
+                prob = gt.astype(np.float)
                 prob = torch.nn.functional.interpolate(torch.from_numpy(prob[None, None]), gt.shape,
                                                 mode='bilinear').numpy()[0,0]
                 logits += [prob.flatten()]
