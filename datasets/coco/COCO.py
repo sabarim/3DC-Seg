@@ -176,8 +176,8 @@ class COCODataset(Dataset):
     return imgs
 
   def generate_clip(self, raw_frame, raw_mask):
-    clip_frames, clip_masks = generate_clip_from_image(raw_frame, raw_mask, self.temporal_window)
-    return clip_frames / 255.0, clip_masks
+    clip_frames, clip_masks = generate_clip_from_image(raw_frame, raw_mask[...,None], self.temporal_window)
+    return clip_frames / 255.0, clip_masks[..., 0]
 
   def set_video_id(self, video):
     pass
