@@ -293,7 +293,7 @@ class Trainer:
             raise ValueError("Unknown task {}".format(args.task))
 
     def backup_session(self, signalNumber, _):
-        if is_main_process():
+        if is_main_process() and self.args.task == 'train':
             save_name = '{}/{}_{}.pth'.format(self.model_dir, "checkpoint", self.iteration)
             print("Received signal {}. \nSaving model to {}".format(signalNumber, save_name))
             save_checkpoint(self.epoch, self.ious.avg, self.losses.avg, self.model, self.optimiser, save_name, is_train=False,
