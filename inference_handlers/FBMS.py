@@ -93,7 +93,7 @@ def save_results(pred, targets, info, results_path, palette):
         pred_for_eval += [torch.stack(pred[f]).mean(dim=0)[:, lh[0]:h-uh[0], lw[0]:w-uw[0]]]
 
     shape = info['shape']
-    img_M = Image.fromarray(imresize(M, shape, interp='nearest'))
+    img_M = Image.fromarray(imresize(M.byte(), shape, interp='nearest'))
     img_M.putpalette(palette)
     if not os.path.exists(results_path):
       os.makedirs(results_path)
