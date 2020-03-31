@@ -65,7 +65,7 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
             all_semantic_pred[f] += [pred_mask[0, :, i].data.cpu().float()]
           else:
             all_semantic_pred[f] = [pred_mask[0, :, i].data.cpu().float()]
-            if f in info['gt_frames']:
+            if 'gt_frames' not in info or f in info['gt_frames']:
               all_targets[f] = target[0, 0, i].data.cpu().float()
 
 
