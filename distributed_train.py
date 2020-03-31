@@ -308,7 +308,7 @@ def register_interrupt_signals(trainer):
     signal.signal(signal.SIGTRAP, trainer.backup_session)
     signal.signal(signal.SIGABRT, trainer.backup_session)
     signal.signal(signal.SIGBUS, trainer.backup_session)
-    signal.signal(signal.SIGKILL, trainer.backup_session)
+    # signal.signal(signal.SIGKILL, trainer.backup_session)
     signal.signal(signal.SIGALRM, trainer.backup_session)
     signal.signal(signal.SIGTERM, trainer.backup_session)
 
