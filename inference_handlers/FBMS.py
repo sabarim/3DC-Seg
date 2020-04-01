@@ -14,6 +14,7 @@ from inference_handlers.SpatialEmbInference import forward
 from loss.SpatiotemporalEmbUtils import Cluster
 from utils.AverageMeter import AverageMeter
 from utils.Constants import DAVIS_ROOT, PRED_LOGITS, PRED_SEM_SEG
+from utils.util import iou_fixed_torch
 
 cluster = Cluster()
 # number of overlapping frames for stitching
@@ -68,12 +69,13 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
             if f in info['gt_frames']:
               all_targets[f] = target[0, 0, i].data.cpu().float()
 
-
-
+      masks = [torch.stack(pred).mean(dim=0) for pred in all_semantic_pred.values()]
+      iou = iou_fixed_torch(torch.stack(masks), torch.stack(list(all_targets.values())))
+      ious_per_video.update(iou, 1)
       f, mae = save_results(all_semantic_pred, all_targets, info, os.path.join('results', args.network_name), palette)
       fs.update(f)
       maes.update(mae)
-      logging.info('Sequence {}: F_max {}  MAE {}'.format(input_dict['info']['name'], f, mae))
+      logging.info('Sequence {}: F_max {}  MAE {} IOU {}'.format(input_dict['info']['name'], f, mae, ious_per_video.avg))
 
   logging.info('Finished Inference F measure: {fs.avg:.5f} MAE: {maes.avg: 5f}'
         .format(fs=fs, maes=maes))
