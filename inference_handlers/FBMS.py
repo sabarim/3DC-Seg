@@ -32,7 +32,9 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
   if not os.path.exists(results_dir):
       os.makedirs(results_dir)
   log_file = os.path.join(results_dir, 'output.log')
-  logging.basicConfig(filename=log_file,level=logging.DEBUG)
+  logging.basicConfig(filename=log_file,level=logging.INFO)
+  pred_for_eval = []
+  gt_for_eval = []
 
   with torch.no_grad():
     for seq in dataset.get_video_ids():
@@ -69,16 +71,23 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
             if 'gt_frames' not in info or f in info['gt_frames']:
               all_targets[f] = target[0, 0, i].data.cpu().float()
 
-      masks = [torch.stack(pred).mean(dim=0) for pred in all_semantic_pred.values()]
-      iou = iou_fixed_torch(torch.stack(masks), torch.stack(list(all_targets.values())))
-      ious_per_video.update(iou, 1)
-      f, mae = save_results(all_semantic_pred, all_targets, info, os.path.join('results', args.network_name), palette)
+      # masks = [torch.stack(pred).mean(dim=0) for key, pred in all_semantic_pred.items() if key in all_targets]
+      # iou = iou_fixed_torch(torch.stack(masks).cuda(), torch.stack(list(all_targets.values())).cuda())
+      # ious_per_video.update(iou, 1)
+      f, mae, pred_flattened, gt_flattened = save_results(all_semantic_pred, all_targets, info, os.path.join('results', args.network_name), palette)
       fs.update(f)
       maes.update(mae)
+      pred_for_eval+=[pred_flattened]
+      gt_for_eval+=[gt_flattened]
       logging.info('Sequence {}: F_max {}  MAE {} IOU {}'.format(input_dict['info']['name'], f, mae, ious_per_video.avg))
 
-  logging.info('Finished Inference F measure: {fs.avg:.5f} MAE: {maes.avg: 5f}'
-        .format(fs=fs, maes=maes))
+  gt = np.hstack(gt_for_eval).flatten()
+  p = np.hstack(pred_for_eval).flatten()
+  precision, recall, _= precision_recall_curve(gt, p)
+  Fmax = 2 * (precision * recall) / (precision + recall)
+  mae = np.mean(np.abs(p - gt))
+  logging.info('Finished Inference F measure: {:.5f} MAE: {: 5f}'
+        .format(np.max(Fmax), mae))
 
 
 def save_results(pred, targets, info, results_path, palette):
@@ -111,4 +120,4 @@ def save_results(pred, targets, info, results_path, palette):
   Fmax = 2 * (precision * recall) / (precision + recall)
   mae = (pred_for_mae - gt).abs().mean()
 
-  return Fmax.max(), mae
+  return Fmax.max(), mae, pred_for_mae.data.cpu().numpy().flatten(), gt.data.cpu().numpy().flatten()

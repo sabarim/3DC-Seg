@@ -298,7 +298,7 @@ class Trainer:
             print("Received signal {}. \nSaving model to {}".format(signalNumber, save_name))
             save_checkpoint(self.epoch, self.ious.avg, self.losses.avg, self.model, self.optimiser, save_name, is_train=False,
                             scheduler=self.lr_schedulers)
-
+        exit(1)
 
 def register_interrupt_signals(trainer):
     signal.signal(signal.SIGHUP, trainer.backup_session)

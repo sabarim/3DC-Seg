@@ -7,11 +7,12 @@ import numpy as np
 from PIL import Image
 
 from datasets.DAVIS import DAVIS
+from utils.Constants import VISAL_ROOT
 from utils.Resize import ResizeMode, resize
 
 SEQ_NAMES = [
-    "aeroplane", "bird", "boat", "boat2", "car", "cat", "cow", "cow2", "gokart", "horse2",
-    "horse3", "lion", "man", "motorbike", "panda", "rider", "snow_leopards"
+    "aeroplane", "bird", "boat", "boat2", "car", "cat", "cow4", "cow5", "gokart", "horse2",
+    "horse3", "lion", "man", "motorbike2", "panda", "rider", "snow_leopards"
 ]
 
 
@@ -37,7 +38,7 @@ class VisalDataset(DAVIS):
     def set_video_id(self, video):
         self.current_video = video
         self.start_index = self.get_start_index(video)
-        self.img_list = list(glob.glob(os.path.join(self.image_dir, self.current_video, '*.jpg')))
+        self.img_list = self.video_frames[video]
         self.img_list.sort()
         # instance_ids = list(range(self.num_objects[video] + 1))
         # instance_ids.remove(0)
@@ -59,7 +60,7 @@ class VisalDataset(DAVIS):
             assert os.path.exists(seq_images_dir), "Images directory not fond at expected path: {}".format(
                 seq_images_dir)
             print("Reading Sequence {}".format(_video))
-            if _video in ("gokart", "snow_leopard"):
+            if _video in ("gokart", "snow_leopards"):
                 regex_pattern = _video + r"[^a-zA-Z]"
             else:
                 regex_pattern = _video + r"[^a-zA-Z0-9]"
@@ -68,7 +69,7 @@ class VisalDataset(DAVIS):
             for type in types:
                 vid_files += sorted(glob.glob(seq_images_dir + type))
             seq_mask_fnames = sorted(filter(lambda f: re.match(regex_pattern, f), mask_fnames))
-            self.gt_frames[_video] = [i for i, f in enumerate(vid_files) if f.split("/")[-1] in seq_mask_fnames]
+            self.gt_frames[_video] = [int(i) for i, f in enumerate(vid_files) if f.split("/")[-1] in seq_mask_fnames]
             assert len(self.gt_frames[_video]) == len(seq_mask_fnames)
             self.num_frames[_video] = len(vid_files)
             self.video_frames[_video] = vid_files
@@ -126,7 +127,7 @@ class VisalDataset(DAVIS):
         num_objects = self.num_objects[sequence]
         info['num_objects'] = num_objects
         info['shape'] = self.shape[sequence]
-        # info['gt_frames'] = self.gt_frames[sequence]
+        info['gt_frames'] = self.gt_frames[sequence]
         index = self.video_frames[sequence].index(img_file)
 
         # retain original shape
@@ -181,8 +182,9 @@ class VisalDataset(DAVIS):
 
 
 if __name__ == '__main__':
-    dataset = VisalDataset(root="/home/sabari/vision-data/", crop_size=480, resize_mode=ResizeMode.RESIZE_SHORT_EDGE)
-    result = dataset.__getitem__(217)
+    dataset = VisalDataset(root=VISAL_ROOT, crop_size=480, resize_mode=ResizeMode.RESIZE_SHORT_EDGE)
+    dataset.set_video_id('gokart')
+    result = dataset.__getitem__(2)
     print("image range: {}\nfgmask: {}\nsupport: {}".format(
         (result['images'].min(),
         result['images'].max()),

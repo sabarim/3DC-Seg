@@ -27,6 +27,9 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
           load_name = chkpts[-1]
           checkpoint = torch.load(load_name)
           start_epoch = checkpoint['epoch'] + 1
+      elif 'pretrain' in loadepoch:
+        load_name = os.path.join(Constants.MODEL_ROOT, loadepoch + '.pth')
+        checkpoint = load_pretrained_weights(load_name)
       elif "resnet" in  loadepoch:
         # transform, checkpoint provided by RGMP
         load_name = os.path.join("saved_models", '{}.pth'.format(loadepoch))
@@ -55,9 +58,6 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
         # checkpoint = {"model": OrderedDict([(k.replace("module.", ""), v) for k, v in checkpoint.items()])}
         checkpoint = {"model": OrderedDict([(k.lower().replace('module.', 'encoder.'), v)
                                             for k, v in checkpoint['state_dict'].items()]), 'epoch': 0}
-      elif 'pretrain' in loadepoch:
-        load_name = os.path.join(Constants.MODEL_ROOT, loadepoch + '.pth')
-        checkpoint = load_pretrained_weights(load_name)
       elif ("csn/" in loadepoch or "2+1d" in loadepoch) and "model_best" not in loadepoch:
         load_name = os.path.join('saved_models/',
                                  '{}.pth'.format(loadepoch))

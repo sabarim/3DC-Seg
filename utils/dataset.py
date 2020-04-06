@@ -1,5 +1,5 @@
 from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT, YOUTUBEVIS_ROOT, MAPILLARY_ROOT, KITTI_ROOT, \
-  FBMS_ROOT
+  FBMS_ROOT, VISAL_ROOT
 
 
 def get_dataset(args):

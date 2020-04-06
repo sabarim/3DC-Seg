@@ -42,8 +42,8 @@ def main(args):
             if os.path.exists(gt_file):
                 preds += [np.array(Image.open(f).convert("P")).flatten()]
                 gt = np.array(Image.open(gt_file))
-                # prob = np.array(pickle.load(open(f.replace('png', 'pkl'), 'rb')))
-                prob = gt.astype(np.float)
+                prob = np.array(pickle.load(open(f.replace('png', 'pkl'), 'rb')))
+                #prob = gt.astype(np.float)
                 prob = torch.nn.functional.interpolate(torch.from_numpy(prob[None, None]), gt.shape,
                                                 mode='bilinear').numpy()[0,0]
                 logits += [prob.flatten()]
@@ -53,7 +53,7 @@ def main(args):
     pred = np.hstack(preds).flatten()
     gt = np.hstack(gts).flatten()
     logits = np.hstack(logits).flatten()
-    precision, recall, _= precision_recall_curve(gt, pred)
+    precision, recall, _= precision_recall_curve(gt, logits)
     Fmax = 2 * (precision * recall) / (precision + recall)
     F+=[Fmax.max()]
     maes += [np.mean(abs(logits - gt))]
