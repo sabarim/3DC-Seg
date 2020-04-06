@@ -41,7 +41,8 @@ class Trainer:
         self.args = args
         self.iteration = 0
         self.epoch = 0
-        self. best_iou_train = 0
+        self.best_iou_train = 0
+        self.best_iou_eval = 0
         self.best_loss_train = 0
         self.losses = AverageMeter()
         self.ious = AverageMeter()
@@ -49,10 +50,12 @@ class Trainer:
         self.ious_extra = AverageMeter()
 
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
-            self.model, self.optimiser, self.lr_schedulers, self.epoch = self.init_distributed(args)
+            self.model, self.optimiser, self.lr_schedulers, self.epoch, \
+            self.best_iou_train, self.best_iou_eval = self.init_distributed(args)
         # TODO: do not use distributed package in this case
         elif torch.cuda.is_available():
-            self.model, self.optimiser, self.lr_schedulers, self.epoch = self.init_distributed(args)
+            self.model, self.optimiser, self.lr_schedulers, self.epoch, \
+            self.best_iou_train, self.best_iou_eval = self.init_distributed(args)
         else:
             raise RuntimeError("CUDA not available.")
         # shuffle parameter does not seem to shuffle the data for distributed sampler
@@ -91,7 +94,7 @@ class Trainer:
         # amp.load_state_dict(amp_weights)
         model = apex.parallel.DistributedDataParallel(model, delay_allreduce=True)
         args.world_size = torch.distributed.get_world_size()
-        return model, optimizer, lr_schedulers, start_epoch
+        return model, optimizer, lr_schedulers, start_epoch, best_iou_train, best_iou_eval
 
     def train(self):
         batch_time = AverageMeter()
@@ -145,13 +148,13 @@ class Trainer:
             end = time.time()
 
             if args.local_rank == 0:
-                print('Epoch: [{0}][{1}/{2}]\t'
+                print('[Iter: {0}]Epoch: [{1}][{2}/{3}]\t'
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
                       'Loss Extra {loss_extra}\t'
                       'IOU {iou.val:.4f} ({iou.avg:.4f})\t'
                       'IOU Extra {iou_extra.val:.4f} ({iou_extra.avg:.4f})\t'.format(
-                    self.epoch, i * args.world_size * args.bs, len(self.trainloader) * args.bs * args.world_size,
+                    self.iteration, self.epoch, i * args.world_size * args.bs, len(self.trainloader) * args.bs * args.world_size,
                            args.world_size * args.bs / batch_time.val,
                            args.world_size * args.bs / batch_time.avg,
                     batch_time=batch_time, loss=self.losses, iou=self.ious,
@@ -162,7 +165,6 @@ class Trainer:
                   'IOU Extra {iou_extra.avg: .2f}'.
                   format(self.epoch, losses=self.losses, losses_extra=self.losses_extra, iou=self.ious,
                          iou_extra=self.ious_extra), flush=True)
-            self.epoch += 1
 
         return self.losses.avg, self.ious.avg
 
@@ -269,22 +271,23 @@ class Trainer:
                     lr_scheduler.step(epoch)
 
                 if args.local_rank == 0:
-                    # if iou_mean > self.best_iou_train or loss_mean < self.best_loss_train:
-                    if not os.path.exists(self.model_dir):
-                        os.makedirs(self.model_dir)
-                    self.best_iou_train = iou_mean if iou_mean > self.best_iou_train else self.best_iou_train
-                    self.best_loss_train = loss_mean if loss_mean < self.best_loss_train else self.best_loss_train
-                    save_name = '{}/{}.pth'.format(self.model_dir, "model_best_train")
-                    save_checkpoint(epoch, iou_mean, loss_mean, self.model, self.optimiser, save_name, is_train=True,
-                                    scheduler=None, amp=amp)
+                    if iou_mean > self.best_iou_train or loss_mean < self.best_loss_train:
+                        if not os.path.exists(self.model_dir):
+                            os.makedirs(self.model_dir)
+                        self.best_iou_train = iou_mean if iou_mean > self.best_iou_train else self.best_iou_train
+                        self.best_loss_train = loss_mean if loss_mean < self.best_loss_train else self.best_loss_train
+                        save_name = '{}/{}.pth'.format(self.model_dir, "model_best_train")
+                        save_checkpoint(epoch, iou_mean, loss_mean, self.model, self.optimiser, save_name, is_train=True,
+                                        scheduler=None, amp=amp)
 
                 if (epoch + 1) % args.eval_epoch == 0:
                     loss_mean, iou_mean = self.eval()
-                    # if iou_mean > best_iou_eval and args.local_rank == 0:
-                    best_iou_eval = iou_mean
-                    save_name = '{}/{}.pth'.format(self.model_dir, "model_best_eval")
-                    save_checkpoint(epoch, iou_mean, loss_mean, self.model, self.optimiser, save_name, is_train=False,
-                                    scheduler=self.lr_schedulers)
+                    if iou_mean > self.best_iou_eval and args.local_rank == 0:
+                        self.best_iou_eval = iou_mean
+                        save_name = '{}/{}.pth'.format(self.model_dir, "model_best_eval")
+                        save_checkpoint(epoch, iou_mean, loss_mean, self.model, self.optimiser, save_name, is_train=False,
+                                        scheduler=self.lr_schedulers)
+                self.epoch += 1
         elif args.task == 'eval':
             self.eval()
         elif 'infer' in args.task:
@@ -298,7 +301,10 @@ class Trainer:
             print("Received signal {}. \nSaving model to {}".format(signalNumber, save_name))
             save_checkpoint(self.epoch, self.ious.avg, self.losses.avg, self.model, self.optimiser, save_name, is_train=False,
                             scheduler=self.lr_schedulers)
+        synchronize()
+        cleanup_env()
         exit(1)
+
 
 def register_interrupt_signals(trainer):
     signal.signal(signal.SIGHUP, trainer.backup_session)
@@ -317,20 +323,8 @@ if __name__ == '__main__':
     args = parse_args()
     trainer = Trainer(args)
     register_interrupt_signals(trainer)
-    try:
-        trainer.start()
-    except RuntimeError as _:
-        if is_main_process():
-            print("Interrupt signal received. Saving checkpoint...")
-            trainer.backup_session(signal.SIGBREAK, None)
-            synchronize()
-        exit(1)
-    except Exception as err:
-        if is_main_process():
-            print("Exception occurred. Saving checkpoint...")
-            print(err)
-            trainer.backup_session(signal.SIGBREAK, None)
-        raise err
-
+    trainer.start()
+    trainer.backup_session(signal.SIGQUIT, None)
+    synchronize()
     cleanup_env()
 
