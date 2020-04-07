@@ -321,6 +321,8 @@ def register_interrupt_signals(trainer):
 
 if __name__ == '__main__':
     args = parse_args()
+    if not os.path.exists("runs/" + args.network_name):
+        os.makedirs("runs/" + args.network_name)
     trainer = Trainer(args)
     register_interrupt_signals(trainer)
     trainer.start()
