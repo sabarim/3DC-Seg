@@ -91,43 +91,6 @@ class Encoder101(Encoder):
     self.register_buffer('mean', torch.FloatTensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1))
     self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
-# class Encoder2plus1d(Encoder3d):
-#   def __init__(self, tw = 16, sample_size = 112):
-#     super(Encoder2plus1d, self).__init__(tw, sample_size)
-#     resnet = r2plus1d_34(num_classes = 400)
-#     self.resnet = resnet
-#     self.conv1 = resnet.stem #conv, batchnorm, relu, conv, batchnorm, relu  1/2, 64
-#
-#     self.layer1 = resnet.layer1 #1/4, 64
-#     self.layer2 = resnet.layer2 #1/8, 128
-#     self.layer3 = resnet.layer3 #1/16, 256
-#     self.layer4 = resnet.layer4 #1/32, 512
-#
-#   def forward(self, in_f, in_p):
-#     assert in_f is not None or in_p is not None
-#     f = (in_f * 255.0 - self.mean) / self.std
-#     f /= 255.0
-#
-#     if in_f is None:
-#       p = in_p.float()
-#       if len(in_p.shape) < 4:
-#         p = torch.unsqueeze(in_p, dim=1).float()  # add channel dim
-#
-#       x = self.conv1_p(p)
-#     elif in_p is not None:
-#       p = in_p.float()
-#       if len(in_p.shape) < 4:
-#         p = torch.unsqueeze(in_p, dim=1).float()  # add channel dim
-#
-#       x = self.conv1(f) + self.conv1_p(p)  # + self.conv1_n(n)
-#     else:
-#       x = self.conv1(f)
-#     r2 = self.layer1(x)  # 1/4, 64
-#     r3 = self.layer2(r2)  # 1/8, 128
-#     r4 = self.layer3(r3)  # 1/16, 256
-#     r5 = self.layer4(r4)  # 1/32, 512
-#
-#     return r5, r4, r3, r2
 
 class Encoder3d_csn_ip(Encoder3d):
   def __init__(self, tw = 16, sample_size = 112):
@@ -194,83 +157,18 @@ class Decoder3d(nn.Module):
     return p
 
 
+class Decoder3dNoGC(Decoder3d):
+  def __init__(self, n_classes=2):
+    super(Decoder3dNoGC, self).__init__(n_classes=n_classes)
+    self.GC = nn.Conv3d(2048, 256, kernel_size=3, padding=1)
+
+
 class Decoder3dNonLocal(Decoder3d):
   def __init__(self, n_classes=2):
     super(Decoder3dNonLocal, self).__init__(n_classes=n_classes)
-    self.conv_non_local = NONLocalBlock3D(256, sub_sample=True)
+    self.GC = nn.Sequential(NONLocalBlock3D(2048, sub_sample=True),
+                            nn.Conv3d(2048, 256, kernel_size=1))
 
-  def forward(self, r5, r4, r3, r2, support):
-    x = self.GC(r5)
-    r = self.convG1(F.relu(x))
-    r = self.convG2(F.relu(r))
-    m5 = x + r  # out: 1/32, 64
-    m4 = self.RF4(r4, m5)  # out: 1/16, 64
-    m3 = self.RF3(r3, m4)  # out: 1/8, 64
-    m3_nl = self.conv_non_local(m3)
-    m2 = self.RF2(r2, F.relu(m3_nl))  # out: 1/4, 64
-
-    p2 = self.pred2(F.relu(m2))
-    p3 = self.pred3(F.relu(m3))
-    p4 = self.pred4(F.relu(m4))
-    p5 = self.pred5(F.relu(m5))
-
-    p = F.interpolate(p2, scale_factor=(1, 4, 4), mode='trilinear')
-
-    return p
-
-
-class DecoderSiam3d(Decoder3dNonLocal):
-  def __init__(self, n_classes=2):
-    super(DecoderSiam3d, self).__init__(n_classes=n_classes)
-    self.conv1 = nn.Conv3d(4096, 2048, kernel_size=3, padding=1)
-    self.GC = GC3d(4096, 256)
-
-  def forward(self, r5, r4, r3, r2, support):
-    # TODO: check why the strides of the 2d and 3d resnets are different.
-    support = F.interpolate(support, size=r5.shape[-2:], mode='bilinear')
-    r5 = torch.cat((r5, support.unsqueeze(2)), dim=1)
-    # r5 = F.relu(self.conv1(r5))
-    # r5 = self.conv_non_local(F.relu(r5))
-    return super(DecoderSiam3d, self).forward(r5, r4, r3, r2, support)
-
-
-class DecoderSimilarity(Decoder3dNonLocal):
-  def __init__(self, n_classes=2):
-    super(DecoderSimilarity, self).__init__(n_classes)
-    self.conv_non_local = NONLocalBlock3D(256, return_sim=True, sub_sample=False)
-
-  def forward(self, r5, r4, r3, r2, support):
-    x = self.GC(r5)
-    r = self.convG1(F.relu(x))
-    r = self.convG2(F.relu(r))
-    m5 = x + r  # out: 1/32, 64
-    m4 = self.RF4(r4, m5)  # out: 1/16, 64
-    m3 = self.RF3(r3, m4)  # out: 1/8, 64
-    m3_nl, f = self.conv_non_local(m3)
-    m2 = self.RF2(r2, F.relu(m3_nl))  # out: 1/4, 64
-
-    p2 = self.pred2(F.relu(m2))
-    p = F.interpolate(p2, scale_factor=(1, 4, 4), mode='trilinear')
-
-    return p, f
-
-
-class Decoder3dMaskGuidance(Decoder3d):
-  def __init__(self, tw=5):
-    super(Decoder3dMaskGuidance, self).__init__()
-    self.GC = GC3d(2049, 256)
-
-"""The R(2+1)D network is based on Resnet-34 instead of Resnet-50, so the channel
-numbers are different which the decoder has to take into account."""
-class Decoder2plus1d(Decoder3d):
-  def __init__(self, n_classes = 2):
-    super(Decoder2plus1d, self).__init__(n_classes)
-    mdim = 256
-    self.GC = GC3d(512, mdim)
-
-    self.RF4 = Refine3d(256, mdim)  # 1/16 -> 1/8
-    self.RF3 = Refine3d(128, mdim)  # 1/8 -> 1/4
-    self.RF2 = Refine3d(64, mdim)  # 1/4 -> 1
 
 class Resnet3d(BaseNetwork):
   def __init__(self, tw=16, sample_size=112):
@@ -304,81 +202,16 @@ class Resnet3d101(Resnet3d):
     # e = self.decoder_embedding.forward(r5, r4, r3, r2, None)
     return p
 
-class SiamResnet3d(BaseNetwork):
-  def __init__(self, tw=8, sample_size=112):
-    super(SiamResnet3d, self).__init__()
-    self.encoder = Encoder3d(tw, sample_size)
-    self.encoder2d = Encoder()
-    self.decoder = DecoderSiam3d()
-    #self.freeze_encoder3d()
-    #self.freeze_encoder2d()
 
-  def freeze_encoder3d(self):
-    print("Freezing the weights for Encoder3d")
-    for m in self.encoder.modules():
-      for p in m.parameters():
-        p.requires_grad = False
-
-  def freeze_encoder2d(self):
-    print("Freezing the weights for Encoder2d")
-    for m in self.encoder2d.modules():
-      for p in m.parameters():
-        p.requires_grad = False
-
-  def forward(self, x, ref):
-    r5_ref, r4_ref, r3_ref, r2_ref = self.encoder2d.forward(x[:, :, 0], ref)
-    r5, r4, r3, r2 = self.encoder.forward(x[:, :, 1:], None)
-    p = self.decoder.forward(r5, r4, r3, r2, r5_ref)
-    return [p]
+class ResnetCSNNoGC(Resnet3d101):
+  def __init__(self, tw=8, sample_size=112, e_dim=7, decoders=None):
+    decoders = [Decoder3dNoGC()] if decoders is None else decoders
+    print("Creating decoders {}".format(decoders))
+    super(ResnetCSNNoGC, self).__init__(tw, sample_size, e_dim, decoders)
+    self.encoder = Encoder3d_csn_ir(tw, sample_size)
 
 
-class Resnet3dNonLocal(Resnet3d):
-  def __init__(self, n_classes=2):
-    super(Resnet3dNonLocal, self).__init__()
-    self.decoder = Decoder3dNonLocal(n_classes)
-
-
-class Resnet3dSimilarity(Resnet3d):
-  def __init__(self, n_classes=2):
-    super(Resnet3dSimilarity, self).__init__()
-    self.decoder = DecoderSimilarity(n_classes)
-
-  def forward(self, x, ref = None):
-    if ref is not None and len(ref.shape) == 4:
-      r5, r4, r3, r2 = self.encoder.forward(x, ref.unsqueeze(2))
-    else:
-      r5, r4, r3, r2 = self.encoder.forward(x, ref)
-    p = self.decoder.forward(r5, r4, r3, r2, None)
-    return p
-
-
-class Resnet3dPredictOne(BaseNetwork):
-  def __init__(self, tw=16, sample_size=112):
-    super(Resnet3dPredictOne, self).__init__()
-    self.encoder = Encoder3d(tw, sample_size)
-    self.encoder.maxpool = self.encoder.resnet.maxpool
-    self.convG1 = nn.Conv2d(2048, 512, kernel_size=3, padding=1)
-    self.convG2 = nn.Conv2d(512, 256, kernel_size=3, padding=1)
-    self.pred = nn.Conv2d(256, 2, kernel_size=3, padding=1, stride=1)
-
-  def forward(self, x, ref):
-    r5, r4, r3, r2 = self.encoder.forward(x, ref)
-    p = self.convG1(F.relu(r5[:, :, -1]))
-    p = self.convG2(F.relu(p))
-    p = self.pred(p)
-    return p, None, None, None, None, r5
-
-
-class Resnet3dMaskGuidance(BaseNetwork):
-  def __init__(self, tw=16, sample_size=112):
-    super(Resnet3dMaskGuidance, self).__init__()
-    self.encoder = Encoder3d(tw, sample_size)
-    self.decoder = Decoder3dMaskGuidance()
-
-  def forward(self, x, ref):
-    r5, r4, r3, r2 = self.encoder.forward(x, None)
-    assert ref is not None
-    ref = F.interpolate(ref, size=r5.shape[-2:], mode='nearest')
-    r5 = torch.cat((r5, ref.unsqueeze(1)), dim=1)
-    p, p2, p3, p4, p5 = self.decoder.forward(r5, r4, r3, r2, None)
-    return p, p2, p3, p4, p5, r5
+class ResnetCSNNonLocal(ResnetCSNNoGC):
+  def __init__(self, tw=8, sample_size=112, e_dim=7):
+    decoders = [Decoder3dNonLocal()]
+    super(ResnetCSNNonLocal, self).__init__(tw, sample_size, e_dim, decoders)
