@@ -1,15 +1,14 @@
 from functools import reduce
 from operator import add
+
 import torch
 from torch import nn
-import numpy as np
-from network.Modules import Refine3dDG, Refine3dConvTranspose, Refine3dLight
-from network.Resnet3d import resnet50, resnet50_no_ts
-from network.Resnet3dAgg import Encoder3d, Decoder3d, Resnet3dSimilarity, Encoder3d_csn_ir, Resnet3d
-from network.embedding_head import NonlocalOffsetEmbeddingHead
-from network.models import BaseNetwork
 from torch.nn import functional as F
 
+from network.Modules import Refine3dConvTranspose, Refine3dLight
+from network.Resnet3d import resnet50_no_ts
+from network.Resnet3dAgg import Encoder3d, Decoder3d, Encoder3d_csn_ir, Resnet3d
+from network.embedding_head import NonlocalOffsetEmbeddingHead
 from network.modules.multiscale import MultiscaleCombinedHeadLongTemporalWindow
 
 
@@ -118,28 +117,6 @@ class MultiScaleDecoder(Decoder3d):
     p, e = self.embedding_head.forward([m5, m4, m3, m2])
 
     return p, e
-
-
-class Resnet3dEmbeddingNetwork(Resnet3dSimilarity):
-  def __init__(self, tw=8, sample_size=112, e_dim=7, n_classes=2):
-    super(Resnet3dEmbeddingNetwork, self).__init__()
-    self.encoder = Encoder3d(tw, sample_size)
-    self.decoder = DecoderWithEmbedding(n_classes=n_classes, e_dim=e_dim)
-
-
-class Resnet3dSegmentEmbedding(Resnet3dSimilarity):
-  def __init__(self, tw=8, sample_size=112,n_classes=2, e_dim=7):
-    super(Resnet3dSegmentEmbedding, self).__init__(n_classes=n_classes)
-    self.encoder = Encoder3d(tw, sample_size)
-    self.decoder = DecoderSegmentEmbedding(n_classes=n_classes, e_dim=e_dim)
-
-
-class Resnet3dSpatialEmbedding(Resnet3dSimilarity):
-  def __init__(self, tw=8, sample_size=112,n_classes=2, e_dim=7):
-    super(Resnet3dSpatialEmbedding, self).__init__(n_classes=n_classes)
-    resnet = resnet50_no_ts(sample_size=sample_size, sample_duration=tw)
-    self.encoder = Encoder3d(tw, sample_size, resnet=resnet)
-    self.decoder = DecoderWithEmbedding(e_dim=e_dim, add_spatial_coord=False)
 
 
 class Resnet3dEmbeddingMultiDecoder(Resnet3d):
