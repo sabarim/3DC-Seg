@@ -12,7 +12,7 @@ network_models = {0:"RGMP", 1:"FeatureAgg3d", 2: "FeatureAgg3dMergeTemporal", 3:
                   12: "Resnet3dSegmentEmbedding", 13: "Resnet3dSpatialEmbedding", 14: "Resnet3dEmbeddingMultiDecoder",
                   15: "Resnet3dChannelSeparated_ip", 16: "Resnet3dChannelSeparated_ir", 17: "Resnet3dCSNiRSameDecoders",
                   18: "Resnet3dCSNiRMultiScale", 19: "Resnet3dCSNiRMultiClass", 20: "Resnet3dCSNiRLight",
-                  21: "Resnet3d101", 22:"ResnetCSNNoGC", 23: "ResnetCSNNonLocal"}
+                  21: "Resnet3d101", 22:"ResnetCSNNoGC", 23: "ResnetCSNNonLocal", 24: "ResnetCSN"}
 #DAVIS_ROOT = '/disk2/data/DAVIS/'
 MODEL_ROOT = '/globalwork/mahadevan/vision/davis-unsupervised/saved_models/'
 PALETTE = [

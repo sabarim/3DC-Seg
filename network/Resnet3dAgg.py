@@ -106,6 +106,7 @@ class Encoder3d_csn_ip(Encoder3d):
     self.layer3 = resnet.layer3  # 1/16, 1024
     self.layer4 = resnet.layer4  # 1/32, 2048
 
+
 class Encoder3d_csn_ir(Encoder3d):
   def __init__(self, tw = 16, sample_size = 112):
     super(Encoder3d_csn_ir, self).__init__(tw, sample_size)
@@ -119,6 +120,7 @@ class Encoder3d_csn_ir(Encoder3d):
     self.layer2 = resnet.layer2  # 1/8, 512
     self.layer3 = resnet.layer3  # 1/16, 1024
     self.layer4 = resnet.layer4  # 1/32, 2048
+
 
 class Decoder3d(nn.Module):
   def __init__(self, n_classes=2):
@@ -201,6 +203,12 @@ class Resnet3d101(Resnet3d):
     p = flatten([decoder.forward(r5, r4, r3, r2, None) for decoder in self.decoders])
     # e = self.decoder_embedding.forward(r5, r4, r3, r2, None)
     return p
+
+
+class ResnetCSN(Resnet3d101):
+  def __init__(self, tw=8, sample_size=112, e_dim=7, decoders=None):
+    super(ResnetCSN, self).__init__(tw, sample_size, e_dim, decoders)
+    self.encoder = Encoder3d_csn_ir(tw, sample_size)
 
 
 class ResnetCSNNoGC(Resnet3d101):
