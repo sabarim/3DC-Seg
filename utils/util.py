@@ -2,9 +2,9 @@ import inspect
 
 import numpy as np
 import torch
-from torch.distributed import all_reduce
 import torch.distributed as dist
-from network.EmbeddingNetwork import Resnet3dSpatialEmbedding
+from torch.distributed import all_reduce
+
 from network.models import BaseNetwork
 
 
