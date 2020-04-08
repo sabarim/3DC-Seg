@@ -101,10 +101,10 @@ class Trainer:
         data_time = AverageMeter()
         # switch to train mode
         self.model.train()
-        self.ious = AverageMeter()
-        self.ious_extra = AverageMeterDict()
-        self.losses = AverageMeter
-        self.losses_extra = AverageMeterDict()
+        self.ious.reset()
+        self.ious_extra.reset()
+        self.losses.reset()
+        self.losses_extra.reset()
 
         end = time.time()
         for i, input_dict in enumerate(self.trainloader):
