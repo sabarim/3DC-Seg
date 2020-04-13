@@ -168,8 +168,8 @@ class Decoder3dNoGC(Decoder3d):
 class Decoder3dNonLocal(Decoder3d):
   def __init__(self, n_classes=2):
     super(Decoder3dNonLocal, self).__init__(n_classes=n_classes)
-    self.GC = nn.Sequential(NONLocalBlock3D(2048, sub_sample=True),
-                            nn.Conv3d(2048, 256, kernel_size=1))
+    self.GC = nn.Sequential(nn.Conv3d(2048, 256, kernel_size=1),
+			    NONLocalBlock3D(256, sub_sample=True))
 
 
 class Resnet3d(BaseNetwork):
