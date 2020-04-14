@@ -6,7 +6,7 @@ import torch
 from apex import amp
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
-
+from torchsummary import summary
 from Forward import forward
 from inference_handlers.inference import infer
 from network.RGMP import Encoder
@@ -66,7 +66,7 @@ class Trainer:
         self.trainloader = DataLoader(self.trainset, batch_size=args.bs, num_workers=args.num_workers,
                                  shuffle=shuffle, sampler=self.train_sampler)
 
-        # print(summary(model, tuple((256,256)), batch_size=1))
+        print(summary(self.model, tuple((3,8,256,256)), batch_size=1))
         params = []
         for key, value in dict(self.model.named_parameters()).items():
             if value.requires_grad:
@@ -266,8 +266,10 @@ class Trainer:
                 encoders = [module for module in self.model.modules() if isinstance(module, Encoder)]
                 for encoder in encoders:
                     encoder.freeze_batchnorm()
-
-            for epoch in range(self.epoch, args.num_epochs):
+            
+            start_epoch = self.epoch
+            for epoch in range(start_epoch, args.num_epochs):
+                self.epoch = epoch
                 if self.train_sampler is not None:
                     self.train_sampler.set_epoch(epoch)
                 loss_mean, iou_mean = self.train()
@@ -291,7 +293,6 @@ class Trainer:
                         save_name = '{}/{}.pth'.format(self.model_dir, "model_best_eval")
                         save_checkpoint(epoch, iou_mean, loss_mean, self.model, self.optimiser, save_name, is_train=False,
                                         scheduler=self.lr_schedulers)
-                self.epoch += 1
         elif args.task == 'eval':
             self.eval()
         elif 'infer' in args.task:

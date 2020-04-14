@@ -30,7 +30,7 @@ def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
       elif 'pretrain' in loadepoch:
         load_name = os.path.join(Constants.MODEL_ROOT, loadepoch + '.pth')
         checkpoint = load_pretrained_weights(load_name)
-      elif "resnet" in  loadepoch:
+      elif loadepoch.startswith("resnet"):
         # transform, checkpoint provided by RGMP
         load_name = os.path.join("saved_models", '{}.pth'.format(loadepoch))
         state = model.state_dict()
