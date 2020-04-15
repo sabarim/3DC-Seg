@@ -101,7 +101,6 @@ class EncoderR2plus1d_34(Encoder3d):
     self.conv1 = resnet.stem
     self.bn1 = nn.Identity()
     self.relu = nn.Identity()
-    self.maxpool = nn.Identity()
 
     self.layer1 = resnet.layer1  
     self.layer2 = resnet.layer2  
@@ -192,7 +191,7 @@ class Decoder3dNonLocal(Decoder3d):
 
 class DecoderR2plus1d(Decoder3d):
   def __init__(self, n_classes=2):
-    super(DecoderR2plus1d, self).__init__(n_classes=n_classes, pred_scale_factor=(1,2,2))
+    super(DecoderR2plus1d, self).__init__(n_classes=n_classes)
     mdim=256
     self.GC = nn.Conv3d(512, 256, kernel_size=3, padding=1)
     self.RF4 = Refine3d(256, mdim)  # 1/16 -> 1/8
