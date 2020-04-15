@@ -82,16 +82,16 @@ class Refine3dConvTranspose(nn.Module):
 class Refine3dLight(Refine3d):
   def __init__(self, inplanes, planes, scale_factor=2):
     super(Refine3dLight, self).__init__(inplanes, planes, scale_factor)
-    self.convFS1 = nn.Sequential( nn.Conv3d(inplanes, planes, kernel_size=1, padding=0),
+    self.convFS1 = nn.Sequential( nn.Conv3d(inplanes, planes, kernel_size=1, padding=0), nn.ReLU(),
                                   nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
-    self.convFS2 = nn.Sequential( nn.Conv3d(planes, planes, kernel_size=1, padding=0),
+    self.convFS2 = nn.Sequential( nn.Conv3d(planes, planes, kernel_size=1, padding=0), nn.ReLU(),
                                   nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
-    self.convFS3 = nn.Sequential( nn.Conv3d(planes, planes, kernel_size=1, padding=0),
+    self.convFS3 = nn.Sequential( nn.Conv3d(planes, planes, kernel_size=1, padding=0), nn.ReLU(),
                                   nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
 
-    self.convMM1 = nn.Sequential( nn.Conv3d(planes, planes, kernel_size=1, padding=0),
+    self.convMM1 = nn.Sequential( nn.Conv3d(planes, planes, kernel_size=1, padding=0), nn.ReLU(),
                                   nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
-    self.convMM2 = nn.Sequential( nn.Conv3d(planes, planes, kernel_size=1, padding=0),
+    self.convMM2 = nn.Sequential( nn.Conv3d(planes, planes, kernel_size=1, padding=0), nn.ReLU(),
                                   nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
 
 
