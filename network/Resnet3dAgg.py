@@ -93,6 +93,21 @@ class Encoder101(Encoder):
     self.register_buffer('std', torch.FloatTensor([0.229, 0.224, 0.225]).view(1, 3, 1, 1))
 
 
+class EncoderR2plus1d_34(Encoder3d):
+  def __init__(self, tw = 8, sample_size = 112):
+    super(EncoderR2plus1d_34, self).__init__(tw, sample_size)
+    resnet = r2plus1d_34(num_classes=359, pretrained=True, arch='r2plus1d_34_32_ig65m')
+    self.resnet = resnet
+    self.conv1 = resnet.stem
+    self.bn1 = nn.Identity()
+    self.relu = nn.Identity()
+
+    self.layer1 = resnet.layer1  
+    self.layer2 = resnet.layer2  
+    self.layer3 = resnet.layer3  
+    self.layer4 = resnet.layer4  
+
+    
 class Encoder3d_csn_ip(Encoder3d):
   def __init__(self, tw = 16, sample_size = 112):
     super(Encoder3d_csn_ip, self).__init__(tw, sample_size)
@@ -173,6 +188,16 @@ class Decoder3dNonLocal(Decoder3d):
 			    NONLocalBlock3D(256, sub_sample=True))
 
 
+class DecoderR2plus1d(Decoder3d):
+  def __init__(self, n_classes=2):
+    super(DecoderR2plus1d, self).__init__(n_classes=n_classes)
+    mdim=256
+    self.GC = nn.Conv3d(512, 256, kernel_size=3, padding=1)
+    self.RF4 = Refine3d(256, mdim)  # 1/16 -> 1/8
+    self.RF3 = Refine3d(128, mdim)  # 1/8 -> 1/4
+    self.RF2 = Refine3d(64, mdim)
+
+
 class Resnet3d(BaseNetwork):
   def __init__(self, tw=16, sample_size=112):
     super(Resnet3d, self).__init__()
@@ -206,22 +231,11 @@ class Resnet3d101(Resnet3d):
     return p
 
 
-class R2plus1d(Resnet3d):
-  def __init__(self, tw=8, sample_size=112, decoders=None):
-    super(R2plus1d, self).__init__(tw=tw, sample_size=sample_size)
-    resnet = r2plus1d_34(num_classes=2, pretrained=True, arch='r2plus1d_34_32_ig65m')
-    self.encoder = Encoder3d(tw, sample_size, resnet=resnet)
-    decoders = [Decoder3d()] if decoders is None else decoders
-    self.decoders = nn.ModuleList()
-    for decoder in decoders:
-      self.decoders.append(decoder)
-
-  def forward(self, x, ref = None):
-    r5, r4, r3, r2 = self.encoder.forward(x, ref)
-    flatten = lambda lst: [lst] if type(lst) is torch.Tensor else reduce(torch.add, [flatten(ele) for ele in lst])
-    p = flatten([decoder.forward(r5, r4, r3, r2, None) for decoder in self.decoders])
-    # e = self.decoder_embedding.forward(r5, r4, r3, r2, None)
-    return p
+class R2plus1d(Resnet3d101):
+  def __init__(self, tw=8, sample_size=112, e_dim=7, decoders=None):
+    decoders = [DecoderR2plus1d()]
+    super(R2plus1d, self).__init__(tw, sample_size, e_dim, decoders)
+    self.encoder = EncoderR2plus1d_34(tw, sample_size)
 
 
 class ResnetCSN(Resnet3d101):

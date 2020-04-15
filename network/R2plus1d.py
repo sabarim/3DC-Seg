@@ -17,7 +17,7 @@ def r2plus1d_34(num_classes, pretrained=False, progress=False, arch=None):
                         conv_makers=[Conv2Plus1D] * 4,
                         layers=[3, 4, 6, 3],
                         stem=R2Plus1dStem)
-
+    
     model.fc = nn.Linear(model.fc.in_features, out_features=num_classes)
 
     # Fix difference in PyTorch vs Caffe2 architecture
@@ -37,5 +37,7 @@ def r2plus1d_34(num_classes, pretrained=False, progress=False, arch=None):
         state_dict = torch.hub.load_state_dict_from_url(model_urls[arch],
                                                         progress=progress)
         model.load_state_dict(state_dict)
+    
+    model.conv1 = model.stem
 
     return model
