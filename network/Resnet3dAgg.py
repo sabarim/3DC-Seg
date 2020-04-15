@@ -101,6 +101,7 @@ class EncoderR2plus1d_34(Encoder3d):
     self.conv1 = resnet.stem
     self.bn1 = nn.Identity()
     self.relu = nn.Identity()
+    self.maxpool = nn.Identity()
 
     self.layer1 = resnet.layer1  
     self.layer2 = resnet.layer2  
@@ -139,9 +140,10 @@ class Encoder3d_csn_ir(Encoder3d):
 
 
 class Decoder3d(nn.Module):
-  def __init__(self, n_classes=2):
+  def __init__(self, n_classes=2, pred_scale_factor = (1,4,4)):
     super(Decoder3d, self).__init__()
     mdim = 256
+    self.pred_scale_factor = pred_scale_factor
     self.GC = GC3d(2048, mdim)
     self.convG1 = nn.Conv3d(mdim, mdim, kernel_size=3, padding=1)
     self.convG2 = nn.Conv3d(mdim, mdim, kernel_size=3, padding=1)
@@ -170,7 +172,7 @@ class Decoder3d(nn.Module):
     p4 = self.pred4(F.relu(m4))
     p5 = self.pred5(F.relu(m5))
 
-    p = F.interpolate(p2, scale_factor=(1,4,4), mode='trilinear')
+    p = F.interpolate(p2, scale_factor=self.pred_scale_factor, mode='trilinear')
 
     return p
 
@@ -185,12 +187,12 @@ class Decoder3dNonLocal(Decoder3d):
   def __init__(self, n_classes=2):
     super(Decoder3dNonLocal, self).__init__(n_classes=n_classes)
     self.GC = nn.Sequential(nn.Conv3d(2048, 256, kernel_size=1),
-			    NONLocalBlock3D(256, sub_sample=True))
+                            NONLocalBlock3D(256, sub_sample=True))
 
 
 class DecoderR2plus1d(Decoder3d):
   def __init__(self, n_classes=2):
-    super(DecoderR2plus1d, self).__init__(n_classes=n_classes)
+    super(DecoderR2plus1d, self).__init__(n_classes=n_classes, pred_scale_factor=(1,2,2))
     mdim=256
     self.GC = nn.Conv3d(512, 256, kernel_size=3, padding=1)
     self.RF4 = Refine3d(256, mdim)  # 1/16 -> 1/8
