@@ -2,6 +2,8 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+from network.NonLocal import NONLocalBlock3D
+
 
 class Refine(nn.Module):
   def __init__(self, inplanes, planes, scale_factor=2):
@@ -78,36 +80,20 @@ class Refine3dConvTranspose(nn.Module):
 
 
 class Refine3dLight(Refine3d):
-  def __init__(self, inplanes, planes, scale_factor=2, conv_t = False):
+  def __init__(self, inplanes, planes, scale_factor=2):
     super(Refine3dLight, self).__init__(inplanes, planes, scale_factor)
-    self.convFS1 = nn.Conv3d(inplanes, planes, kernel_size=(1,1,1), padding=0)
-    self.convFS2 = nn.Conv3d(planes, planes, kernel_size=(1, 3, 3), padding=(0, 1, 1))
-    self.convFS3 = nn.Conv3d(planes, planes, kernel_size=(3, 1, 1), padding=(1, 0, 0))
-    self.convFS4 = nn.Conv3d(planes, planes, kernel_size=(1,3,3), padding=(0,1,1))
-    self.convFS5 = nn.Conv3d(planes, planes, kernel_size=(3,1,1), padding=(1,0,0))
-    self.convFS6 = nn.Conv3d(inplanes, planes, kernel_size=(1, 1, 1), padding=0)
+    self.convFS1 = nn.Sequential( nn.Conv3d(inplanes, planes, kernel_size=1, padding=0),
+                                  nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
+    self.convFS2 = nn.Sequential( nn.Conv3d(inplanes, planes, kernel_size=1, padding=0),
+                                  nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
+    self.convFS3 = nn.Sequential( nn.Conv3d(inplanes, planes, kernel_size=1, padding=0),
+                                  nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
 
-    self.convMM1 = nn.Conv3d(planes, planes, kernel_size=(1,3,3), padding=(0,1,1))
-    self.convMM2 = nn.Conv3d(planes, planes, kernel_size=(3,1,1), padding=(1,0,0))
-    # Use transpose conv to upsample the feature maps
-    self.conv_t = nn.ConvTranspose3d(planes, planes, 2, stride=2, bias=True) if conv_t else None
-    self.scale_factor = scale_factor
+    self.convMM1 = nn.Sequential( nn.Conv3d(inplanes, planes, kernel_size=1, padding=0),
+                                  nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
+    self.convMM2 = nn.Sequential( nn.Conv3d(inplanes, planes, kernel_size=1, padding=0),
+                                  nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
 
-  def forward(self, f, pm):
-    s = self.convFS1(f)
-    sr = self.convFS2(s)
-    sr = self.convFS3(F.relu(sr))
-    sr = self.convFS4(F.relu(sr))
-    sr = self.convFS5(F.relu(sr))
-    s = self.convFS6(f) + sr
-
-    m = s + F.interpolate(pm, size=s.shape[-3:], mode='trilinear') if self.conv_t is None \
-      else s + F.relu(self.conv_t(pm))
-
-    mr = self.convMM1(F.relu(m))
-    mr = self.convMM2(F.relu(mr))
-    m = m + mr
-    return m
 
 class UpsamplerBlock(nn.Module):
   def __init__(self, in_channels, out_channels):
@@ -190,6 +176,27 @@ class GC3d(nn.Module):
     x_l = self.conv_l2(self.conv_l1(x))
     x_r = self.conv_r2(self.conv_r1(x))
     x = x_l + x_r
+    return x
+
+
+class NL(nn.Module):
+  def __init__(self, inplanes, planes):
+    super(NL, self).__init__()
+    self.nl = nn.Sequential(nn.Conv3d(inplanes, planes, kernel_size=1),
+                            NONLocalBlock3D(planes, sub_sample=True))
+
+  def forward(self, x):
+    x = self.nl(x)
+    return x
+
+
+class C3D(nn.Module):
+  def __init__(self, inplanes, planes):
+    super(C3D, self).__init__()
+    self.c3d = nn.Conv3d(inplanes, planes, kernel_size=3, padding=1)
+
+  def forward(self, x):
+    x = self.c3d(x)
     return x
 
 

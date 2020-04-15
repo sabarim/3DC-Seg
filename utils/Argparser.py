@@ -170,6 +170,15 @@ def parse_args():
                       help='learning rate decay rate',
                       default=0.95, type=float)
 
+  # network modules
+  parser.add_argument('--inter_block', dest='inter_block',
+                      help='intermediate network module to use <GC3d, NL, Conv3d>',
+                      default='GC3d', type=str)
+  parser.add_argument('--refine_block', dest='refine_block',
+                      help='refinement block to use <Refine3d, Refine2plus1d, Refine3dLight>',
+                      default='Refine3d', type=str)
+
+
   # tensorboard summary
   parser.add_argument('--show_image_summary', dest='show_image_summary',
                       help='show image summary',

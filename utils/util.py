@@ -3,6 +3,7 @@ import inspect
 import numpy as np
 import torch
 import torch.distributed as dist
+from torch import nn
 from torch.distributed import all_reduce
 
 from network.models import BaseNetwork
@@ -102,6 +103,7 @@ def show_image_summary(count, foo, input_var, masks_guidance, target, pred):
 
 def get_model(args, network_models):
   model_classes = all_subclasses(BaseNetwork)
+  modules = all_subclasses(nn.Module)
   class_index = [cls.__name__ for cls in model_classes].index(network_models[args.network])
   model_class = list(model_classes)[class_index]
   spec = inspect.signature(model_class.__init__)
@@ -113,6 +115,15 @@ def get_model(args, network_models):
     params['tw'] = args.tw
   if 'e_dim' in fn_args:
     params['e_dim'] = args.embedding_dim
+  if 'inter_block' in fn_args:
+    class_index = [cls.__name__ for cls in modules].index(args.inter_block)
+    module_class = list(modules)[class_index]
+    params['inter_block'] = module_class
+  if 'refine_block' in fn_args:
+    class_index = [cls.__name__ for cls in modules].index(args.refine_block)
+    module_class = list(modules)[class_index]
+    params['refine_block'] = module_class
+
   model = model_class(**params)
   return model
 
