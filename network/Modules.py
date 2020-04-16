@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torchvision.models.video.resnet import Conv2Plus1D
 
 from network.NonLocal import NONLocalBlock3D
 
@@ -52,6 +53,15 @@ class Refine3d(nn.Module):
     m = m + mr
     return m
 
+
+class Refine2plus1d(Refine3d):
+  def __init__(self, inplanes, planes, scale_factor=2):
+    super(Refine2plus1d, self).__init__(inplanes, planes, scale_factor)
+    self.convFS1 = Conv2Plus1D(inplanes, planes, planes*2 + 32)
+    self.convFS2 = Conv2Plus1D(planes, planes, planes*2 + 32)
+    self.convFS3 = Conv2Plus1D(planes, planes, planes*2 + 32)
+    self.convMM1 = Conv2Plus1D(planes, planes, planes*2 + 32)
+    self.convMM2 = Conv2Plus1D(planes, planes, planes*2 + 32)
 
 class Refine3dConvTranspose(nn.Module):
   def __init__(self, inplanes, planes, scale_factor=2):
