@@ -224,6 +224,7 @@ class Resnet3d101(Resnet3d):
     self.decoders = nn.ModuleList()
     for decoder in decoders:
       self.decoders.append(decoder)
+    print("Using decoders {}".format(self.decoders))
 
   def forward(self, x, ref = None):
     r5, r4, r3, r2 = self.encoder.forward(x, ref)
@@ -243,7 +244,6 @@ class R2plus1d(Resnet3d101):
 class ResnetCSN(Resnet3d101):
   def __init__(self, tw=8, sample_size=112, e_dim=7, decoders=None, inter_block=GC3d, refine_block = Refine3d):
     super(ResnetCSN, self).__init__(tw, sample_size, e_dim, decoders, inter_block=inter_block, refine_block=refine_block)
-    print("Using decoders {}".format(self.decoders))
     self.encoder = Encoder3d_csn_ir(tw, sample_size)
 
 
