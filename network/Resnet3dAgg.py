@@ -235,7 +235,7 @@ class Resnet3d101(Resnet3d):
 
 class R2plus1d(Resnet3d101):
   def __init__(self, tw=8, sample_size=112, e_dim=7, decoders=None, inter_block=GC3d, refine_block = Refine3d):
-    decoders = [DecoderR2plus1d()]
+    decoders = [DecoderR2plus1d(inter_block=inter_block, refine_block=refine_block)]
     super(R2plus1d, self).__init__(tw, sample_size, e_dim, decoders)
     self.encoder = EncoderR2plus1d_34(tw, sample_size)
 
