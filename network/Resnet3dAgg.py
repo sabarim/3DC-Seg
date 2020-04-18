@@ -177,19 +177,19 @@ class Decoder3d(nn.Module):
     return p
 
 
-# class Decoder3dNoGC(Decoder3d):
-#   def __init__(self, n_classes=2):
-#     super(Decoder3dNoGC, self).__init__(n_classes=n_classes)
-#     self.GC = nn.Conv3d(2048, 256, kernel_size=3, padding=1)
-#
-#
-# class Decoder3dNonLocal(Decoder3d):
-#   def __init__(self, n_classes=2):
-#     super(Decoder3dNonLocal, self).__init__(n_classes=n_classes)
-#     self.GC = nn.Sequential(nn.Conv3d(2048, 256, kernel_size=1),
-#                             NONLocalBlock3D(256, sub_sample=True))
-#
-#
+class Decoder3dNoGC(Decoder3d):
+  def __init__(self, n_classes=2):
+    super(Decoder3dNoGC, self).__init__(n_classes=n_classes)
+    self.GC = nn.Conv3d(2048, 256, kernel_size=3, padding=1)
+
+
+class Decoder3dNonLocal(Decoder3d):
+  def __init__(self, n_classes=2):
+    super(Decoder3dNonLocal, self).__init__(n_classes=n_classes)
+    self.GC = nn.Sequential(nn.Conv3d(2048, 256, kernel_size=1),
+                            NONLocalBlock3D(256, sub_sample=True))
+
+
 class DecoderR2plus1d(Decoder3d):
   def __init__(self, n_classes=2, inter_block=GC3d, refine_block = Refine3d):
     super(DecoderR2plus1d, self).__init__(n_classes=n_classes)
@@ -247,15 +247,15 @@ class ResnetCSN(Resnet3d101):
     self.encoder = Encoder3d_csn_ir(tw, sample_size)
 
 
-# class ResnetCSNNoGC(Resnet3d101):
-#   def __init__(self, tw=8, sample_size=112, e_dim=7, decoders=None):
-#     decoders = [Decoder3dNoGC()] if decoders is None else decoders
-#     print("Creating decoders {}".format(decoders))
-#     super(ResnetCSNNoGC, self).__init__(tw, sample_size, e_dim, decoders)
-#     self.encoder = Encoder3d_csn_ir(tw, sample_size)
-#
-#
-# class ResnetCSNNonLocal(ResnetCSNNoGC):
-#   def __init__(self, tw=8, sample_size=112, e_dim=7):
-#     decoders = [Decoder3dNonLocal()]
-#     super(ResnetCSNNonLocal, self).__init__(tw, sample_size, e_dim, decoders)
+class ResnetCSNNoGC(Resnet3d101):
+  def __init__(self, tw=8, sample_size=112, e_dim=7, decoders=None):
+    decoders = [Decoder3dNoGC()] if decoders is None else decoders
+    print("Creating decoders {}".format(decoders))
+    super(ResnetCSNNoGC, self).__init__(tw, sample_size, e_dim, decoders)
+    self.encoder = Encoder3d_csn_ir(tw, sample_size)
+
+
+class ResnetCSNNonLocal(ResnetCSNNoGC):
+  def __init__(self, tw=8, sample_size=112, e_dim=7):
+    decoders = [Decoder3dNonLocal()]
+    super(ResnetCSNNonLocal, self).__init__(tw, sample_size, e_dim, decoders)
