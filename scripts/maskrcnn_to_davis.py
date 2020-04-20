@@ -7,7 +7,7 @@ from PIL import Image
 
 from inference_handlers.infer_utils.Visualisation import create_color_map
 
-maskrcnn_data_dir = "/home/sabari/vision-data/maskrcnn_davis_testdev_masks/Full-Resolution/"
+maskrcnn_data_dir = "/globalwork/athar/Davis2020/maskrcnn_davis_testdev_masks/Full-Resolution/"
 out_dir = "../results/davis_testdev_from_maskrcnn/"
 THRESH=0.1
 

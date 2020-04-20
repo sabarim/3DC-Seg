@@ -13,7 +13,7 @@ VISAL_ROOT = "/globalwork/mahadevan/mywork/data/ViSal/"
 #                   15: "Resnet3dChannelSeparated_ip", 16: "Resnet3dChannelSeparated_ir", 17: "Resnet3dCSNiRSameDecoders",
 #                   18: "Resnet3dCSNiRMultiScale", 19: "Resnet3dCSNiRMultiClass", 20: "Resnet3dCSNiRLight",
 #                   21: "Resnet3d101", 22:"ResnetCSNNoGC", 23: "ResnetCSNNonLocal", 24: "ResnetCSN", 25: "R2plus1d"}
-network_models = {0: "Resnet3d101", 1: "ResnetCSN", 25: "R2plus1d"}
+network_models = {0: "Resnet3d101", 1: "ResnetCSN", 25: "R2plus1d", 3: "ResnetCSNNoGC", 4: "ResnetCSNNonLocal"}
 #DAVIS_ROOT = '/disk2/data/DAVIS/'
 MODEL_ROOT = '/globalwork/mahadevan/vision/davis-unsupervised/saved_models/'
 PALETTE = [
