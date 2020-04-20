@@ -1,4 +1,5 @@
 from functools import reduce
+from network.NonLocal import NONLocalBlock3D
 
 import torch
 from torch import nn
