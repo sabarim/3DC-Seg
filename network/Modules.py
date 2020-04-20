@@ -54,6 +54,21 @@ class Refine3d(nn.Module):
     return m
 
 
+class RefineSimple(nn.Module):
+  def __init__(self, inplanes, planes, scale_factor=2):
+    super(RefineSimple, self).__init__()
+    self.convMM1 = nn.Conv3d(planes + inplanes, planes, kernel_size=3, padding=1)
+    self.convMM2 = nn.Conv3d(planes, planes, kernel_size=3, padding=1)
+    self.scale_factor = scale_factor
+
+  def forward(self, f, pm):
+    m = torch.cat((f, F.interpolate(pm, size=f.shape[-3:], mode='trilinear')), dim=1)
+
+    m = self.convMM1(m)
+    m = self.convMM2(F.relu(m))
+    return m
+
+
 class Refine2plus1d(Refine3d):
   def __init__(self, inplanes, planes, scale_factor=2):
     super(Refine2plus1d, self).__init__(inplanes, planes, scale_factor)
