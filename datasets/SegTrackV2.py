@@ -10,13 +10,8 @@ from datasets.DAVIS import DAVIS
 from utils.Constants import VISAL_ROOT
 from utils.Resize import ResizeMode, resize
 
-SEQ_NAMES = [
-    "aeroplane", "bird", "boat", "boat2", "car", "cat", "cow4", "cow5", "gokart", "horse2",
-    "horse3", "lion", "man", "motorbike2", "panda", "rider", "snow_leopards"
-]
 
-
-class VisalDataset(DAVIS):
+class SegTrackV2Dataset(DAVIS):
     def __init__(self, root, is_train=False, crop_size=None, temporal_window=8, min_temporal_gap=2,
                  max_temporal_gap=8, resize_mode=ResizeMode.FIXED_SIZE):
         # maintain a dict to store the index length for videos. They are different for fbms
@@ -25,13 +20,13 @@ class VisalDataset(DAVIS):
         self.video_frames = {}
         self.video_masks = {}
         self.mask_list = []
-        super(VisalDataset, self).__init__(root=root, is_train=is_train, crop_size=crop_size,
+        super(SegTrackV2Dataset, self).__init__(root=root, is_train=is_train, crop_size=crop_size,
                                           temporal_window=temporal_window,
                                           min_temporal_gap=min_temporal_gap, max_temporal_gap=max_temporal_gap,
                                           resize_mode=resize_mode)
 
     def set_paths(self, imset, resolution, root):
-        self.image_dir = os.path.join(root, "ViSal")
+        self.image_dir = os.path.join(root, "JPEGImages")
         self.mask_dir = os.path.join(root, "GroundTruth")
         return self.image_dir
 
@@ -49,35 +44,45 @@ class VisalDataset(DAVIS):
             self.image_dir)
         assert os.path.exists(self.mask_dir), "Ground truth directory not found at expected path: {}".format(
             self.mask_dir)
-        types = ('/*.bmp', '/*.png')
-        mask_fnames = []
-        for type in types:
-            mask_fnames += sorted(glob.glob(self.mask_dir + type))
-        mask_fnames = [fname.split("/")[-1] for fname in mask_fnames]
-        for _video in SEQ_NAMES:
+
+        def get_image_files(dirpath):
+            return [f for f in sorted(glob.glob(os.path.join(dirpath, "*"))) if re.search(r"(\.png|\.bmp)$", f)]
+
+        seq_names = [d for d in sorted(os.listdir(self.image_dir))]
+        seq_names = [d for d in seq_names if os.path.isdir(os.path.join(self.image_dir,d))]
+
+        for _video in seq_names:
             self.videos.append(_video)
             seq_images_dir = os.path.join(self.image_dir, _video)
             assert os.path.exists(seq_images_dir), "Images directory not found at expected path: {}".format(
                 seq_images_dir)
             print("Reading Sequence {}".format(_video))
-            if _video in ("gokart", "snow_leopards"):
-                regex_pattern = _video + r"[^a-zA-Z]"
-            else:
-                regex_pattern = _video + r"[^a-zA-Z0-9]"
+            gt_dir_content = sorted(glob.glob(os.path.join(self.mask_dir, _video, "*")))
+            vid_files = get_image_files(seq_images_dir)
 
-            vid_files = []
-            for type in types:
-                vid_files += sorted(glob.glob(seq_images_dir + type))
-            seq_mask_fnames = sorted(filter(lambda f: re.match(regex_pattern, f), mask_fnames))
-            self.gt_frames[_video] = [int(i) for i, f in enumerate(vid_files) if f.split("/")[-1] in seq_mask_fnames]
-            assert len(self.gt_frames[_video]) == len(seq_mask_fnames)
+            mask_paths = []
+            if all([os.path.isdir(x) for x in gt_dir_content]):  # format (1): directories for instances
+                for instance_dir in gt_dir_content:
+                    mask_paths.append(get_image_files(instance_dir))
+                mask_paths = list(zip(*mask_paths))
+                assert len(mask_paths) == len(vid_files), "Size mismatch: {}".format(len(vid_files),
+                                                                                               len(mask_paths))
+                # print(seq.mask_paths)
+                # exit(0)
+            elif all([os.path.isfile(x) for x in gt_dir_content]):
+                mask_paths = [f for f in gt_dir_content if re.search(r"(\.png|\.bmp)$", f)]
+            else:
+                raise ValueError("What bulls*it is this?!")
+
+            self.gt_frames[_video] = [int(i) for i, f in enumerate(vid_files)]
+            assert len(self.gt_frames[_video]) == len(mask_paths)
             self.num_frames[_video] = len(vid_files)
             self.video_frames[_video] = vid_files
-            self.video_masks[_video] =  [os.path.join(self.mask_dir,fname) for fname in seq_mask_fnames]
+            self.video_masks[_video] =  mask_paths
             self.num_objects[_video] = 1
             self.shape[_video] = np.shape(np.array(Image.open(vid_files[0]).convert('RGB')))[:2]
             self.img_list += vid_files
-            self.mask_list += seq_mask_fnames
+            self.mask_list += mask_paths
             # self.gt_frames[sequence] = [int(f.split("/")[-1].split("_")[-1].split(".")[0])
             #                          for f in glob.glob(os.path.join(self.mask_dir, sequence, '*.png'))]
         self.reference_list = self.img_list
@@ -86,16 +91,19 @@ class VisalDataset(DAVIS):
         # use a blend of both full random instance as well as the full object
         img_file = self.video_frames[video][f]
         fname = img_file.split("/")[-1]
-        mask_file = os.path.join(self.mask_dir, fname)
+        mask_file = self.video_masks[video][f]
         raw_frames = np.array(Image.open(img_file).convert('RGB')) / 255.
-        if os.path.exists(mask_file):
-            raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
-            raw_mask = (raw_mask!=0).astype(np.uint8)
-            mask_void = (raw_mask == 255).astype(np.uint8)
-            raw_mask[raw_mask == 255] = 0
+        if isinstance(mask_file, (list, tuple)):
+            assert mask_file[0].split("/")[-1].split(".")[0] == img_file.split("/")[-1].split(".")[0]
+            frame_masks = [np.array(Image.open(mask).convert('P')) > 128 for mask
+                           in mask_file]
+            raw_mask = np.any(np.stack(frame_masks, 0), 0).astype(np.uint8)
         else:
-            raw_mask = np.zeros((raw_frames.shape[:2])).astype(np.uint8)
-            mask_void = (np.ones_like(raw_mask) * 255).astype(np.uint8)
+            assert mask_file.split("/")[-1].split(".")[0] == img_file.split("/")[-1].split(".")[0]
+            raw_mask = np.array(Image.open(mask_file).convert('P'))
+            raw_mask = (raw_mask > 0).astype(np.uint8)
+        mask_void = (raw_mask == 255).astype(np.uint8)
+        raw_mask[raw_mask == 255] = 0
 
         raw_masks = (raw_mask == instance_id).astype(np.uint8) if instance_id is not None else raw_mask
         tensors_resized = resize({"image": raw_frames, "mask": raw_masks},
@@ -182,9 +190,9 @@ class VisalDataset(DAVIS):
 
 
 if __name__ == '__main__':
-    dataset = VisalDataset(root=VISAL_ROOT, crop_size=480, resize_mode=ResizeMode.RESIZE_SHORT_EDGE)
-    dataset.set_video_id('gokart')
-    result = dataset.__getitem__(2)
+    dataset = SegTrackV2Dataset(root="/home/sabari/vision-data/", crop_size=480, resize_mode=ResizeMode.RESIZE_SHORT_EDGE)
+    dataset.set_video_id(dataset.get_video_ids()[-1])
+    result = dataset.__getitem__(20)
     print("image range: {}\nfgmask: {}\nsupport: {}".format(
         (result['images'].min(),
         result['images'].max()),

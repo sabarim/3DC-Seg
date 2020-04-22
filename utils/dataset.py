@@ -1,5 +1,5 @@
 from utils.Constants import DAVIS_ROOT, YOUTUBEVOS_ROOT, COCO_ROOT, YOUTUBEVIS_ROOT, MAPILLARY_ROOT, KITTI_ROOT, \
-  FBMS_ROOT, VISAL_ROOT
+    FBMS_ROOT, VISAL_ROOT, SEGTRACK_ROOT
 
 
 def get_dataset(args):
@@ -177,6 +177,10 @@ def get_dataset(args):
     from datasets.visal.visal import VisalDataset
     testset = VisalDataset(VISAL_ROOT, is_train=False, crop_size=args.crop_size_eval,
                              resize_mode=args.resize_mode_eval, temporal_window=args.tw)
+  elif args.test_dataset == "segtrack":
+    from datasets.SegTrackV2 import SegTrackV2Dataset
+    testset = SegTrackV2Dataset(SEGTRACK_ROOT, is_train=False, crop_size=args.crop_size_eval,
+                           resize_mode=args.resize_mode_eval, temporal_window=args.tw)
 
   if 'infer' in args.task:
     if 'davis_proposal_guidance' in args.test_dataset:
