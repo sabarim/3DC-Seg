@@ -23,6 +23,8 @@ def parse_args():
   parser.add_argument('--bs', dest='bs',
                       help='batch_size',
                       default=1, type=int)
+  parser.add_argument('--optimizer_step_interval', '-osi', type=int,
+                      default=1, dest='optimizer_step_interval')
   parser.add_argument('--num_workers', dest='num_workers',
                       help='num_workers',
                       default=1, type=int)

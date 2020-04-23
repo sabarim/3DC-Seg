@@ -1,4 +1,5 @@
 import torch
+import math
 from torch import nn
 from torch.nn import functional as F
 from torchvision.models.video.resnet import Conv2Plus1D
@@ -118,6 +119,42 @@ class Refine3dLight(Refine3d):
                                   nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
     self.convMM2 = nn.Sequential( nn.Conv3d(planes, planes, kernel_size=1, padding=0), nn.ReLU(),
                                   nn.Conv3d(planes, planes, kernel_size=3, padding=1, groups=planes))
+
+
+
+class Refine3dLightGN(Refine3d):
+  def __init__(self, inplanes, planes, scale_factor=2, n_groups=32):
+    super(Refine3dLightGN, self).__init__(inplanes, planes, scale_factor)
+
+    def conv_gn(in_channels, out_channels):
+      return nn.Sequential(
+         nn.Conv3d(in_channels, in_channels, kernel_size=3, padding=1, groups=in_channels, bias=False),
+         nn.GroupNorm(n_groups, in_channels),
+         nn.ReLU(inplace=True),
+         nn.Conv3d(in_channels, out_channels, kernel_size=1, padding=0, bias=False),
+         nn.GroupNorm(n_groups, out_channels),
+         nn.ReLU(inplace=True)
+      )
+
+    self.convFS1 = conv_gn(inplanes, planes)
+    self.convFS2 = conv_gn(planes, planes)
+    self.convFS3 = conv_gn(planes, planes)
+
+    self.convMM1 = conv_gn(planes, planes)
+    self.convMM2 = conv_gn(planes, planes)
+
+  def forward(self, f, pm):
+    s = self.convFS1(f)
+    sr = self.convFS2(s)
+    sr = self.convFS3(sr)
+    s = s + sr
+
+    m = s + F.interpolate(pm, size=s.shape[-3:], mode='trilinear')
+
+    mr = self.convMM1(m)
+    mr = self.convMM2(mr)
+    m = m + mr
+    return m
 
 
 class UpsamplerBlock(nn.Module):
@@ -271,3 +308,127 @@ class PSPModule(nn.Module):
     priors = [stage(feats).view(n, c, -1) for stage in self.stages]
     center = torch.cat(priors, -1)
     return center
+
+
+class _ASPPImagePooler(nn.Module):
+  def __init__(self, in_planes, out_planes):
+    super(_ASPPImagePooler, self).__init__()
+
+    self.pool = nn.AdaptiveAvgPool3d((None, 1, 1))
+    self.conv = nn.Conv3d(in_planes, out_planes, 1, bias=False)
+    self.gn = nn.GroupNorm(16, out_planes)
+
+  def forward(self, x):
+    T, H, W = x.shape[-3:]
+    x = self.pool(x)
+    x = self.gn(F.relu(self.conv(x)))
+    return F.interpolate(x, (T, H, W), mode='trilinear', align_corners=True)
+
+
+class _ASPPConv(nn.Sequential):
+  def __init__(self, in_planes, out_planes, dilation):
+    super(_ASPPConv, self).__init__(
+      nn.Conv3d(in_planes, in_planes, (1, 3, 3), padding=(0, dilation, dilation), dilation=(1, dilation, dilation), groups=out_planes, bias=False),
+      nn.ReLU(inplace=True),
+      nn.GroupNorm(16, in_planes),
+      nn.Conv3d(in_planes, out_planes, 1, bias=False),
+      nn.ReLU(inplace=True),
+      nn.GroupNorm(16, out_planes)
+    )
+
+class ASPPModule(nn.Module):
+  def __init__(self, in_planes, out_planes, inter_planes=None):
+    super(ASPPModule, self).__init__()
+
+    if not inter_planes:
+      inter_planes = int(out_planes / 4)
+
+    self.pyramid_layers = nn.ModuleList([
+      nn.Sequential(
+        nn.Conv3d(in_planes, inter_planes, 1, bias=False),
+        nn.ReLU(inplace=True),
+        nn.GroupNorm(16, inter_planes)
+      ),
+      _ASPPConv(in_planes, inter_planes, 3),
+      _ASPPConv(in_planes, inter_planes, 6),
+      _ASPPConv(in_planes, inter_planes, 9),
+      _ASPPImagePooler(in_planes, inter_planes)
+    ])
+
+    self.conv = nn.Conv3d(inter_planes * 5, out_planes, 1, padding=0, bias=False)
+    self.gn = nn.GroupNorm(32, out_planes)
+
+    for m in self.modules():
+      if isinstance(m, nn.Conv3d):
+          n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+          m.weight.data.normal_(0, math.sqrt(2. / n))
+
+  def forward(self, x):
+    x = [layer(x) for layer in self.pyramid_layers]
+    x = torch.cat(x, 1)
+    return self.gn(F.relu(self.conv(x)))
+
+
+class ChannelSepConv3d(nn.Sequential):
+  def __init__(self, inplanes, outplanes, n_groups=32):
+    super(ChannelSepConv3d, self).__init__(
+      nn.Conv3d(inplanes, inplanes, 3, padding=1, groups=outplanes, bias=False),
+      nn.GroupNorm(n_groups, inplanes),
+      nn.ReLU(inplace=True),
+      nn.Conv3d(inplanes, outplanes, 1, bias=False),
+      nn.GroupNorm(n_groups, outplanes),
+      nn.ReLU(inplace=True)
+    )
+
+
+class BMVC19Decoder(nn.Module):
+  def __init__(self):
+    super().__init__()
+
+    self.conv1 = ChannelSepConv3d(512, 128)
+    self.conv2 = ChannelSepConv3d(256, 128)
+    self.conv3 = ChannelSepConv3d(256, 64)
+
+    self.conv_a = ChannelSepConv3d(128, 128)
+    self.conv_b = ChannelSepConv3d(64, 128)
+
+    self.conv_out = nn.Conv3d(64, 2, 1, bias=False)
+
+  def forward(self, x):
+    x3, x2, x1 = x  # largest to smallest in size
+
+    x = self.conv1(x1)
+    x = F.interpolate(x, x2.shape[-3:], mode='trilinear', align_corners=True)
+    x = torch.cat((x, x2), 1)
+
+    x = self.conv2(x)
+    x = F.interpolate(x, x3.shape[-3:], mode='trilinear', align_corners=True)
+    x = torch.cat((x, x3), 1)
+
+    x = F.interpolate(x, scale_factor=(1, 2, 2), mode='trilinear', align_corners=True)
+    return self.conv_out(x)
+
+
+def test_aspp():
+  aspp = ASPPModule(256, 64, 256).cuda()
+  x = torch.zeros(1, 256, 1, 120, 210, dtype=torch.float32).cuda()
+
+  y = aspp(x)
+  print(y.shape)
+
+
+def test_bmvc19decoder():
+  x = [
+    torch.zeros(1, 64, 8, 240, 427, dtype=torch.float32).cuda(),
+    torch.zeros(1, 128, 8, 120, 214, dtype=torch.float32).cuda(),
+    torch.zeros(1, 512, 4, 30, 54, dtype=torch.float32).cuda()
+  ]
+
+  decoder = BMVC19Decoder().cuda()
+  print(decoder(x).shape)
+
+
+if __name__ == '__main__':
+  # test_aspp()
+  test_bmvc19decoder()
+

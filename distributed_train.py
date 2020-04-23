@@ -48,6 +48,7 @@ class Trainer:
         self.ious = AverageMeter()
         self.losses_extra = AverageMeterDict()
         self.ious_extra = AverageMeter()
+        self.optimizer_step_interval = args.optimizer_step_interval
 
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             self.model, self.optimiser, self.lr_schedulers, self.epoch, \
@@ -105,6 +106,8 @@ class Trainer:
         self.ious_extra.reset()
         self.losses.reset()
         self.losses_extra.reset()
+        ii = 0
+        self.optimiser.zero_grad()
 
         end = time.time()
         for i, input_dict in enumerate(self.trainloader):
@@ -112,12 +115,17 @@ class Trainer:
                 forward(args, self.criterion, input_dict, self.model, ious_extra=self.ious_extra, summarywriter=self.writer)
 
             # compute gradient and do SGD step
-            self.optimiser.zero_grad()
             with amp.scale_loss(loss, self.optimiser) as scaled_loss:
+                scaled_loss = scaled_loss / float(self.optimizer_step_interval)
                 scaled_loss.backward()
-            # loss.backward()
+            
+            ii += 1
+            if ii != self.optimizer_step_interval:
+                continue
+            
             self.optimiser.step()
             self.iteration += 1
+            ii = 0
 
             # Average loss and accuracy across processes for logging
             if torch.cuda.device_count() > 1:
@@ -319,7 +327,7 @@ def register_interrupt_signals(trainer):
     signal.signal(signal.SIGTRAP, trainer.backup_session)
     signal.signal(signal.SIGABRT, trainer.backup_session)
     signal.signal(signal.SIGBUS, trainer.backup_session)
-    # signal.signal(signal.SIGKILL, trainer.backup_session)
+    signal.signal(signal.SIGKILL, trainer.backup_session)
     signal.signal(signal.SIGALRM, trainer.backup_session)
     signal.signal(signal.SIGTERM, trainer.backup_session)
 
