@@ -122,7 +122,8 @@ class Trainer:
             ii += 1
             if ii != self.optimizer_step_interval:
                 continue
-            
+           
+	    self.optimiser.zero_grad() 
             self.optimiser.step()
             self.iteration += 1
             ii = 0
