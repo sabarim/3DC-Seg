@@ -1,9 +1,11 @@
 import os
 import time
 
+import apex
 import numpy as np
 import torch
 from PIL import Image
+from apex.amp import amp
 from torch.utils.data import DataLoader, RandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
@@ -17,7 +19,8 @@ from utils.AverageMeter import AverageMeter, AverageMeterDict
 from utils.Constants import DAVIS_ROOT, network_models
 from utils.Saver import load_weights, save_checkpoint
 from utils.dataset import get_dataset
-from utils.util import get_lr_schedulers, show_image_summary, get_model
+from utils.util import get_lr_schedulers, show_image_summary, get_model, init_torch_distributed
+
 
 def train(train_loader, model, criterion, optimizer, epoch, foo):
   """
@@ -158,8 +161,25 @@ if __name__ == '__main__':
       device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
       print("devices available: {}".format(torch.cuda.device_count()))
-      model = torch.nn.DataParallel(model)
-      model.cuda()
+      if args.precision == "mixed":
+          torch.cuda.set_device(args.local_rank)
+          init_torch_distributed()
+          model = apex.parallel.convert_syncbn_model(model)
+          model.cuda()
+          optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+          opt_levels = {'fp32': 'O0', 'fp16': 'O2', 'mixed': 'O1'}
+          if args.precision in opt_levels:
+              opt_level = opt_levels[args.precision]
+          else:
+              print('WARN: Precision string is not understood. Falling back to fp32')
+          print("opt_level is {}".format(opt_level))
+          model, optimizer = amp.initialize(model, optimizer, opt_level=opt_level)
+          # amp.load_state_dict(amp_weights)
+          model = apex.parallel.DistributedDataParallel(model, delay_allreduce=True)
+          args.world_size = torch.distributed.get_world_size()
+      else:
+          model = torch.nn.DataParallel(model)
+          model.cuda()
       # init_torch_distributed()
       # opt_level = "O1" if args.mixed_precision else "O0"
       # print("opt_level is {}".format(opt_level))
