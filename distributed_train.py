@@ -65,7 +65,7 @@ class Trainer:
             shuffle=True)
         shuffle = True if self.train_sampler is None else False
         self.trainloader = DataLoader(self.trainset, batch_size=args.bs, num_workers=args.num_workers,
-                                 shuffle=shuffle, sampler=self.train_sampler)
+                                      shuffle=shuffle, sampler=self.train_sampler)
 
         print(summary(self.model, tuple((3,8,256,256)), batch_size=1))
         params = []
@@ -118,12 +118,12 @@ class Trainer:
             with amp.scale_loss(loss, self.optimiser) as scaled_loss:
                 scaled_loss = scaled_loss / float(self.optimizer_step_interval)
                 scaled_loss.backward()
-            
+
             ii += 1
             if ii != self.optimizer_step_interval:
                 continue
-           
-	    self.optimiser.zero_grad() 
+
+            self.optimiser.zero_grad()
             self.optimiser.step()
             self.iteration += 1
             ii = 0
@@ -168,8 +168,8 @@ class Trainer:
                       'IOU {iou.val:.4f} ({iou.avg:.4f})\t'
                       'IOU Extra {iou_extra.val:.4f} ({iou_extra.avg:.4f})\t'.format(
                     self.iteration, self.epoch, i * args.world_size * args.bs, len(self.trainloader) * args.bs * args.world_size,
-                           args.world_size * args.bs / batch_time.val,
-                           args.world_size * args.bs / batch_time.avg,
+                                                args.world_size * args.bs / batch_time.val,
+                                                args.world_size * args.bs / batch_time.avg,
                     batch_time=batch_time, loss=self.losses, iou=self.ious,
                     loss_extra=self.losses_extra, iou_extra=self.ious_extra), flush=True)
 
@@ -275,7 +275,7 @@ class Trainer:
                 encoders = [module for module in self.model.modules() if isinstance(module, Encoder)]
                 for encoder in encoders:
                     encoder.freeze_batchnorm()
-            
+
             start_epoch = self.epoch
             for epoch in range(start_epoch, args.num_epochs):
                 self.epoch = epoch
