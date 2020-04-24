@@ -119,15 +119,6 @@ class Trainer:
                 scaled_loss = scaled_loss / float(self.optimizer_step_interval)
                 scaled_loss.backward()
 
-            ii += 1
-            if ii != self.optimizer_step_interval:
-                continue
-
-            self.optimiser.zero_grad()
-            self.optimiser.step()
-            self.iteration += 1
-            ii = 0
-
             # Average loss and accuracy across processes for logging
             if torch.cuda.device_count() > 1:
                 reduced_loss = reduce_tensor(loss, args).data.item()
@@ -155,6 +146,15 @@ class Trainer:
                 masks_guidance = input_dict['masks_guidance'] if 'masks_guidance' in input_dict else None
                 show_image_summary(self.iteration, self.writer, input_dict['images'][0:1].float(), masks_guidance,
                                    input_dict['target'][0:1], output[0:1])
+
+            ii += 1
+            if ii != self.optimizer_step_interval:
+                continue
+
+            self.optimiser.step()
+            self.optimiser.zero_grad()
+            self.iteration += 1
+            ii = 0
 
             torch.cuda.synchronize()
             batch_time.update((time.time() - end) / args.print_freq)
@@ -324,7 +324,9 @@ def register_interrupt_signals(trainer):
     for i in [x for x in dir(signal) if x.startswith("SIG")]:
         try:
             signum = getattr(signal, i)
-            signal.signal(signum, trainer.backup_session())
+            if signum != 0:
+                print("Signal number: {}, {}".format(signum, i))
+                signal.signal(signum, trainer.backup_session)
         except (OSError, RuntimeError) as m:  # OSError for Python3, RuntimeError for 2
             print("Skipping {}".format(i))
     # signal.signal(signal.SIGHUP, trainer.backup_session)
@@ -349,4 +351,5 @@ if __name__ == '__main__':
     trainer.backup_session(signal.SIGQUIT, None)
     synchronize()
     cleanup_env()
+
 
