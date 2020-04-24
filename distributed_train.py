@@ -321,16 +321,22 @@ class Trainer:
 
 
 def register_interrupt_signals(trainer):
-    signal.signal(signal.SIGHUP, trainer.backup_session)
-    signal.signal(signal.SIGINT, trainer.backup_session)
-    signal.signal(signal.SIGQUIT, trainer.backup_session)
-    signal.signal(signal.SIGILL, trainer.backup_session)
-    signal.signal(signal.SIGTRAP, trainer.backup_session)
-    signal.signal(signal.SIGABRT, trainer.backup_session)
-    signal.signal(signal.SIGBUS, trainer.backup_session)
-    signal.signal(signal.SIGKILL, trainer.backup_session)
-    signal.signal(signal.SIGALRM, trainer.backup_session)
-    signal.signal(signal.SIGTERM, trainer.backup_session)
+    for i in [x for x in dir(signal) if x.startswith("SIG")]:
+        try:
+            signum = getattr(signal, i)
+            signal.signal(signum, trainer.backup_session())
+        except (OSError, RuntimeError) as m:  # OSError for Python3, RuntimeError for 2
+            print("Skipping {}".format(i))
+    # signal.signal(signal.SIGHUP, trainer.backup_session)
+    # signal.signal(signal.SIGINT, trainer.backup_session)
+    # signal.signal(signal.SIGQUIT, trainer.backup_session)
+    # signal.signal(signal.SIGILL, trainer.backup_session)
+    # signal.signal(signal.SIGTRAP, trainer.backup_session)
+    # signal.signal(signal.SIGABRT, trainer.backup_session)
+    # signal.signal(signal.SIGBUS, trainer.backup_session)
+    # signal.signal(signal.SIGKILL, trainer.backup_session)
+    # signal.signal(signal.SIGALRM, trainer.backup_session)
+    # signal.signal(signal.SIGTERM, trainer.backup_session)
 
 
 if __name__ == '__main__':
