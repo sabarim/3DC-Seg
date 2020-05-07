@@ -54,8 +54,9 @@ class DAVIS16(DAVIS):
       mask_file = os.path.join(self.mask_dir, video, '{:05d}.png'.format(f))  # allways return first frame mask
       raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
     except:
-      mask_file = os.path.join(self.mask_dir, video, '00000.png')
-      raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
+      # mask_file = os.path.join(self.mask_dir, video, '00000.png')
+      # raw_mask = np.array(Image.open(mask_file).convert('P'), dtype=np.uint8)
+      raw_mask = np.zeros(raw_frames.shape[:2], dtype=np.uint8)
 
     mask_void = (raw_mask == 255).astype(np.uint8)
     raw_mask[raw_mask == 255] = 0
