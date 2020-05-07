@@ -64,11 +64,21 @@ class DAVIS(data.Dataset):
         _video = line.rstrip('\n')
         self.videos.append(_video)
         self.num_frames[_video] = len(glob.glob(os.path.join(self.image_dir, _video, '*.jpg')))
-        _mask = np.array(Image.open(os.path.join(self.mask_dir, _video, '00000.png')).convert("P"))
-        self.num_objects[_video] = np.max(_mask)
-        self.shape[_video] = np.shape(_mask)
-        self.shape480p[_video] = np.shape(np.array(Image.open(os.path.join(self.mask_dir.replace('Full-Resolution', '480p'),
-                                                                          _video, '00000.png')).convert("P")))
+        _mask_file = os.path.join(self.mask_dir, _video, '00000.png')
+        if os.path.exists(_mask_file):
+          _mask = np.array(Image.open(os.path.join(self.mask_dir, _video, '00000.png')).convert("P"))
+          self.num_objects[_video] = np.max(_mask)
+          self.shape[_video] = np.shape(_mask)
+          self.shape480p[_video] = np.shape(
+            np.array(Image.open(os.path.join(self.mask_dir.replace('Full-Resolution', '480p'),
+                                             _video, '00000.png')).convert("P")))
+        else:
+          _image = np.array(Image.open(os.path.join(self.image_dir, _video, '00000.jpg')).convert("P"))
+          self.num_objects[_video] = -1
+          self.shape[_video] = np.shape(_image.shape[:2])
+          self.shape480p[_video] = np.array(Image.open(os.path.join(self.image_dir.replace('Full-Resolution', '480p'), _video,
+                                                                    '00000.png')).convert("RGB")).shape[:2]
+
         self.img_list += list(glob.glob(os.path.join(self.image_dir, _video, '*.jpg')))
 
       if self.is_train:
