@@ -48,7 +48,6 @@ class Trainer:
         self.ious = AverageMeter()
         self.losses_extra = AverageMeterDict()
         self.ious_extra = AverageMeter()
-        self.optimizer_step_interval = args.optimizer_step_interval
 
         if torch.cuda.is_available() and torch.cuda.device_count() > 1:
             self.model, self.optimiser, self.lr_schedulers, self.epoch, \
@@ -65,7 +64,7 @@ class Trainer:
             shuffle=True)
         shuffle = True if self.train_sampler is None else False
         self.trainloader = DataLoader(self.trainset, batch_size=args.bs, num_workers=args.num_workers,
-                                      shuffle=shuffle, sampler=self.train_sampler)
+                                 shuffle=shuffle, sampler=self.train_sampler)
 
         print(summary(self.model, tuple((3,8,256,256)), batch_size=1))
         params = []
@@ -106,8 +105,6 @@ class Trainer:
         self.ious_extra.reset()
         self.losses.reset()
         self.losses_extra.reset()
-        ii = 0
-        self.optimiser.zero_grad()
 
         end = time.time()
         for i, input_dict in enumerate(self.trainloader):
@@ -115,9 +112,12 @@ class Trainer:
                 forward(args, self.criterion, input_dict, self.model, ious_extra=self.ious_extra, summarywriter=self.writer)
 
             # compute gradient and do SGD step
+            self.optimiser.zero_grad()
             with amp.scale_loss(loss, self.optimiser) as scaled_loss:
-                scaled_loss = scaled_loss / float(self.optimizer_step_interval)
                 scaled_loss.backward()
+            # loss.backward()
+            self.optimiser.step()
+            self.iteration += 1
 
             # Average loss and accuracy across processes for logging
             if torch.cuda.device_count() > 1:
@@ -147,15 +147,6 @@ class Trainer:
                 show_image_summary(self.iteration, self.writer, input_dict['images'][0:1].float(), masks_guidance,
                                    input_dict['target'][0:1], output[0:1])
 
-            ii += 1
-            if ii != self.optimizer_step_interval:
-                continue
-
-            self.optimiser.step()
-            self.optimiser.zero_grad()
-            self.iteration += 1
-            ii = 0
-
             torch.cuda.synchronize()
             batch_time.update((time.time() - end) / args.print_freq)
             end = time.time()
@@ -168,8 +159,8 @@ class Trainer:
                       'IOU {iou.val:.4f} ({iou.avg:.4f})\t'
                       'IOU Extra {iou_extra.val:.4f} ({iou_extra.avg:.4f})\t'.format(
                     self.iteration, self.epoch, i * args.world_size * args.bs, len(self.trainloader) * args.bs * args.world_size,
-                                                args.world_size * args.bs / batch_time.val,
-                                                args.world_size * args.bs / batch_time.avg,
+                           args.world_size * args.bs / batch_time.val,
+                           args.world_size * args.bs / batch_time.avg,
                     batch_time=batch_time, loss=self.losses, iou=self.ious,
                     loss_extra=self.losses_extra, iou_extra=self.ious_extra), flush=True)
 
@@ -275,7 +266,7 @@ class Trainer:
                 encoders = [module for module in self.model.modules() if isinstance(module, Encoder)]
                 for encoder in encoders:
                     encoder.freeze_batchnorm()
-
+            
             start_epoch = self.epoch
             for epoch in range(start_epoch, args.num_epochs):
                 self.epoch = epoch
@@ -329,16 +320,6 @@ def register_interrupt_signals(trainer):
                 signal.signal(signum, trainer.backup_session)
         except (OSError, RuntimeError) as m:  # OSError for Python3, RuntimeError for 2
             print("Skipping {}".format(i))
-    # signal.signal(signal.SIGHUP, trainer.backup_session)
-    # signal.signal(signal.SIGINT, trainer.backup_session)
-    # signal.signal(signal.SIGQUIT, trainer.backup_session)
-    # signal.signal(signal.SIGILL, trainer.backup_session)
-    # signal.signal(signal.SIGTRAP, trainer.backup_session)
-    # signal.signal(signal.SIGABRT, trainer.backup_session)
-    # signal.signal(signal.SIGBUS, trainer.backup_session)
-    # signal.signal(signal.SIGKILL, trainer.backup_session)
-    # signal.signal(signal.SIGALRM, trainer.backup_session)
-    # signal.signal(signal.SIGTERM, trainer.backup_session)
 
 
 if __name__ == '__main__':
