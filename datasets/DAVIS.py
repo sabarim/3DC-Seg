@@ -73,11 +73,11 @@ class DAVIS(data.Dataset):
             np.array(Image.open(os.path.join(self.mask_dir.replace('Full-Resolution', '480p'),
                                              _video, '00000.png')).convert("P")))
         else:
-          _image = np.array(Image.open(os.path.join(self.image_dir, _video, '00000.jpg')).convert("P"))
+          _image = np.array(Image.open(os.path.join(self.image_dir, _video, '00000.jpg')).convert("RGB"))
           self.num_objects[_video] = -1
           self.shape[_video] = np.shape(_image.shape[:2])
           self.shape480p[_video] = np.array(Image.open(os.path.join(self.image_dir.replace('Full-Resolution', '480p'), _video,
-                                                                    '00000.png')).convert("RGB")).shape[:2]
+                                                                    '00000.jpg')).convert("RGB")).shape[:2]
 
         self.img_list += list(glob.glob(os.path.join(self.image_dir, _video, '*.jpg')))
 
