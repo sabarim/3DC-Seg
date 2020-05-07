@@ -101,6 +101,9 @@ def parse_args():
   parser.add_argument('--resolution', dest='resolution',
                       help='resolution of input images',
                       default="480p", type=str)
+  parser.add_argument('--imset_test', dest='davis_imset_test',
+                      help='davis imageset to use',
+                      default="2017/val.txt", type=str)
 
   # flags for inference
   parser.add_argument('--exhaustive', dest='exhaustive',

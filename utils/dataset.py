@@ -120,7 +120,7 @@ def get_dataset(args):
                                     resize_mode=args.resize_mode_eval, temporal_window=args.tw, min_size=args.min_size)
   elif 'davis_proposal_guidance' in args.test_dataset:
     from datasets.DAVISProposalGuidance import DAVISProposalGuidanceEval
-    testset = DAVISProposalGuidanceEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=args.random_instance,
+    testset = DAVISProposalGuidanceEval(DAVIS_ROOT, imset=args.davis_imset_test, random_instance=args.random_instance,
                                         crop_size=args.crop_size_eval, resize_mode=args.resize_mode_eval,
                                         temporal_window=args.tw, proposal_dir=args.proposal_dir)
   elif "davis16_last" in args.test_dataset:
@@ -134,7 +134,7 @@ def get_dataset(args):
                           num_classes=args.n_classes)
   elif "davis_similarity" in args.test_dataset:
     from datasets.DAVIS16 import DAVISSimilarity
-    testset = DAVISSimilarity(DAVIS_ROOT, imset="2017/val.txt", crop_size=args.crop_size_eval, random_instance=args.random_instance,
+    testset = DAVISSimilarity(DAVIS_ROOT, imset=args.davis_imset_test, crop_size=args.crop_size_eval, random_instance=args.random_instance,
                           resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir,
                               num_classes=args.n_classes, resolution=args.resolution)
   elif "davis_siam" in args.test_dataset:
@@ -143,21 +143,21 @@ def get_dataset(args):
                           resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir)
   elif "davis17_3d" in args.test_dataset:
     from datasets.DAVIS16 import DAVIS16
-    testset = DAVIS16(DAVIS_ROOT, imset="2017/val.txt", is_train=False, crop_size=args.crop_size, resize_mode=args.resize_mode,
+    testset = DAVIS16(DAVIS_ROOT, imset=args.davis_imset_test, is_train=False, crop_size=args.crop_size, resize_mode=args.resize_mode,
                        temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
                        random_instance=args.random_instance)
   elif "davis17_mask_guidance" in args.test_dataset:
     from datasets.DAVIS16 import DAVIS17MaskGuidance
-    testset = DAVIS17MaskGuidance(DAVIS_ROOT, imset="2017/val.txt", is_train=False, crop_size=args.crop_size, resize_mode=args.resize_mode,
+    testset = DAVIS17MaskGuidance(DAVIS_ROOT, imset=args.davis_imset_test, is_train=False, crop_size=args.crop_size, resize_mode=args.resize_mode,
                        temporal_window=args.tw, augmentors=args.augmentors, proposal_dir=args.proposal_dir,
                        random_instance=args.random_instance)
   elif 'davis_3d' in args.test_dataset:
     from datasets.DAVIS3dProposalGuidance import DAVIS3dProposalGuidanceEval
-    testset = DAVIS3dProposalGuidanceEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=False, crop_size=args.crop_size_eval,
+    testset = DAVIS3dProposalGuidanceEval(DAVIS_ROOT, imset=args.davis_imset_test, random_instance=False, crop_size=args.crop_size_eval,
                                           resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir)
   elif 'davis' in args.test_dataset:
     from datasets.DAVIS import DAVISEval
-    testset = DAVISEval(DAVIS_ROOT, imset='2017/val.txt', random_instance=False, crop_size=args.crop_size_eval,
+    testset = DAVISEval(DAVIS_ROOT, imset=args.davis_imset_test, random_instance=False, crop_size=args.crop_size_eval,
                         resize_mode=args.resize_mode_eval, temporal_window=args.tw, proposal_dir=args.proposal_dir)
   elif args.test_dataset == "youtube_vos":
     from datasets.YoutubeVOS import YoutubeVOSDataset
