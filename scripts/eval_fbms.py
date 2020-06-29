@@ -9,6 +9,8 @@ from torch.nn import functional as F
 from PIL import Image
 from sklearn.metrics import precision_recall_curve
 
+from utils.util import iou_fixed_torch
+
 
 def main(args):
     results_path = args.results_path
@@ -47,6 +49,7 @@ def main(args):
 
     pred = np.hstack(preds).flatten()
     gt = np.hstack(gts).flatten()
+    iou = iou_fixed_torch(pred, gt)
     logits = np.hstack(logits).flatten()
     precision, recall, _= precision_recall_curve(gt, pred)
     Fmax = 2 * (precision * recall) / (precision + recall)
@@ -54,7 +57,7 @@ def main(args):
     maes += [np.mean(abs(logits - gt))]
         # print('Sequence {}: F_max {}  MAE {}'.format(seq_name, Fmax.max(), np.mean(abs(pred - gt))))
 
-    print("Finished eval: F {}  MAE {}".format(np.mean(F), np.mean(maes)))
+    print("Finished eval: F {}  MAE {} IOU {}".format(np.mean(F), np.mean(maes), iou))
 
 
 if __name__ == '__main__':

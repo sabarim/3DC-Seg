@@ -118,6 +118,9 @@ class YoutubeVISDataset(YoutubeVOSDataset):
 
 
 if __name__ == '__main__':
+    j = os.path.join(YOUTUBEVIS_ROOT, 'VIS-labels', 'valid.json')
+    j_c = json.load(open(j))
+    print([c['name'] for c in j_c['categories']])
     dataset = YoutubeVISDataset(YOUTUBEVIS_ROOT, is_train=True)
     for i in np.random.choice(np.arange(dataset.__len__()), 5):
       result = dataset.__getitem__(i)

@@ -46,7 +46,7 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
       all_semantic_pred = {}
       all_targets = {}
       for iter, input_dict in enumerate(dataloader):
-        if not args.exhaustive and (iter % (args.tw - OVERLAPS)) != 0:
+        if not args.exhaustive and (iter % (args.tw - args.clip_overlap)) != 0:
           continue
         info = input_dict['info']
         target = input_dict['target']
@@ -71,9 +71,10 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
             if 'gt_frames' not in info or f in info['gt_frames']:
               all_targets[f] = target[0, 0, i].data.cpu().float()
 
-      # masks = [torch.stack(pred).mean(dim=0) for key, pred in all_semantic_pred.items() if key in all_targets]
-      # iou = iou_fixed_torch(torch.stack(masks).cuda(), torch.stack(list(all_targets.values())).cuda())
-      # ious_per_video.update(iou, 1)
+      masks = [torch.stack(pred).mean(dim=0) for key, pred in all_semantic_pred.items() if key in all_targets]
+      iou = iou_fixed_torch(torch.stack(masks).cuda(), torch.stack(list(all_targets.values())).cuda())
+      ious_per_video.update(iou, 1)
+      ious.update(iou, 1)
       f, mae, pred_flattened, gt_flattened = save_results(all_semantic_pred, all_targets, info, os.path.join('results', args.network_name), palette)
       fs.update(f)
       maes.update(mae)
@@ -81,13 +82,14 @@ def infer_fbms(dataset, model, criterion, writer, args, distributed=False):
       gt_for_eval+=[gt_flattened]
       logging.info('Sequence {}: F_max {}  MAE {} IOU {}'.format(input_dict['info']['name'], f, mae, ious_per_video.avg))
 
+  print("IOU: {}".format(iou))
   gt = np.hstack(gt_for_eval).flatten()
   p = np.hstack(pred_for_eval).flatten()
   precision, recall, _= precision_recall_curve(gt, p)
   Fmax = 2 * (precision * recall) / (precision + recall)
   mae = np.mean(np.abs(p - gt))
-  logging.info('Finished Inference F measure: {:.5f} MAE: {: 5f}'
-        .format(np.max(Fmax), mae))
+  logging.info('Finished Inference F measure: {:.5f} MAE: {: 5f} IOU: {:5f}'
+        .format(np.max(Fmax), mae, ious.avg))
 
 
 def save_results(pred, targets, info, results_path, palette):

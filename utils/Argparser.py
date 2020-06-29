@@ -109,7 +109,7 @@ def parse_args():
   parser.add_argument('--exhaustive', dest='exhaustive',
                       help='Infer for clips starting from every frame',
                       default=False, type=bool)
-  parser.add_argument('--overlap', dest='overlap',
+  parser.add_argument('--overlap', dest='clip_overlap',
                       help='Sample clips with an overlap specified by this flag.',
                       default=3, type=int)
   parser.add_argument('--stitch', dest='stitch',

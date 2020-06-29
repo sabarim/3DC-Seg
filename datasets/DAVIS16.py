@@ -32,9 +32,12 @@ class DAVIS16(DAVIS):
     self.start_index = self.get_start_index(video)
     self.img_list = list(glob.glob(os.path.join(self.image_dir, self.current_video, '*.jpg')))
     self.img_list.sort()
-    instance_ids = list(range(self.num_objects[video] + 1))
-    instance_ids.remove(0)
-    self.random_instance_ids[video] = random.choice(instance_ids)
+    if self.num_objects[video] != -1:
+      instance_ids = list(range(self.num_objects[video] + 1))
+      instance_ids.remove(0)
+      self.random_instance_ids[video] = random.choice(instance_ids)
+    else:
+      self.random_instance_ids[video] = -1
 
   def get_video_ids(self):
     # shuffle the list for training

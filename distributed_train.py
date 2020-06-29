@@ -66,7 +66,7 @@ class Trainer:
         self.trainloader = DataLoader(self.trainset, batch_size=args.bs, num_workers=args.num_workers,
                                  shuffle=shuffle, sampler=self.train_sampler)
 
-        print(summary(self.model, tuple((3,8,256,256)), batch_size=1))
+        print(summary(self.model, tuple((3,args.tw,256,256)), batch_size=1))
         params = []
         for key, value in dict(self.model.named_parameters()).items():
             if value.requires_grad:
@@ -312,14 +312,24 @@ class Trainer:
 
 
 def register_interrupt_signals(trainer):
-    for i in [x for x in dir(signal) if x.startswith("SIG")]:
-        try:
-            signum = getattr(signal, i)
-            if signum != 0:
-                print("Signal number: {}, {}".format(signum, i))
-                signal.signal(signum, trainer.backup_session)
-        except (OSError, RuntimeError) as m:  # OSError for Python3, RuntimeError for 2
-            print("Skipping {}".format(i))
+    #for i in [x for x in dir(signal) if x.startswith("SIG")]:
+    #    try:
+    #        signum = getattr(signal, i)
+    #        if signum != 0:
+    #            print("Signal number: {}, {}".format(signum, i))
+    #            signal.signal(signum, trainer.backup_session)
+    #    except (OSError, RuntimeError) as m:  # OSError for Python3, RuntimeError for 2
+    #        print("Skipping {}".format(i))
+    signal.signal(signal.SIGHUP, trainer.backup_session)
+    signal.signal(signal.SIGINT, trainer.backup_session)
+    signal.signal(signal.SIGQUIT, trainer.backup_session)
+    signal.signal(signal.SIGILL, trainer.backup_session)
+    signal.signal(signal.SIGTRAP, trainer.backup_session)
+    signal.signal(signal.SIGABRT, trainer.backup_session)
+    signal.signal(signal.SIGBUS, trainer.backup_session)
+    #signal.signal(signal.SIGKILL, trainer.backup_session)
+    signal.signal(signal.SIGALRM, trainer.backup_session)
+    signal.signal(signal.SIGTERM, trainer.backup_session)
 
 
 if __name__ == '__main__':
