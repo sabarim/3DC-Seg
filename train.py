@@ -19,7 +19,7 @@ from utils.AverageMeter import AverageMeter, AverageMeterDict
 from utils.Constants import DAVIS_ROOT, network_models
 from utils.Saver import load_weights, save_checkpoint
 from utils.dataset import get_dataset
-from utils.util import get_lr_schedulers, show_image_summary, get_model, init_torch_distributed
+from utils.util import get_lr_schedulers, show_image_summary, get_model_from_args, init_torch_distributed
 
 
 def train(train_loader, model, criterion, optimizer, epoch, foo):
@@ -146,7 +146,7 @@ if __name__ == '__main__':
     shuffle = True if args.data_sample is None else False
     trainloader = DataLoader(trainset, batch_size=args.bs, num_workers=args.num_workers, shuffle=shuffle, sampler=sampler)
     testloader = DataLoader(testset, batch_size=1, shuffle=False, pin_memory=True)
-    model = get_model(args, network_models)
+    model = get_model_from_args(args, network_models)
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
     model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval, _ = \
       load_weights(model, optimizer, args, MODEL_DIR, scheduler=None)  # params

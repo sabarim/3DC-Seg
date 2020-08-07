@@ -17,6 +17,10 @@ SEGTRACK_ROOT = "/globalwork/data/segtrack-v2/"
 network_models = {0: "Resnet3d101", 1: "ResnetCSN", 25: "R2plus1d", 3: "ResnetCSNNoGC", 4: "ResnetCSNNonLocal"}
 #DAVIS_ROOT = '/disk2/data/DAVIS/'
 MODEL_ROOT = '/globalwork/mahadevan/vision/davis-unsupervised/saved_models/'
+
+# Optimisers
+ADAM_OPTIMISER = "Adam"
+
 PALETTE = [
   0, 0, 0,
   31, 119, 180,

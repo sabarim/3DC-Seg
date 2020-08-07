@@ -20,10 +20,11 @@ class Davis(VideoDataset):
     self.num_frames = {}
     self.num_objects = {}
     self.shape = {}
+    self.raw_samples = []
     super(Davis, self).__init__(root, mode, resize_mode, resize_shape, tw, max_temporal_gap, num_classes)
 
   def filter_samples(self, video):
-    filtered_samples = [s for s in self.samples if s[INFO]['video'] == video]
+    filtered_samples = [s for s in self.raw_samples if s[INFO]['video'] == video]
     self.samples = filtered_samples
 
   def set_video_id(self, video):
@@ -33,7 +34,7 @@ class Davis(VideoDataset):
 
   def get_video_ids(self):
     # shuffle the list for training
-    return random.sample(self.videos, len(self.videos)) if self.is_train else self.videos
+    return random.sample(self.videos, len(self.videos)) if self.is_train() else self.videos
 
   def get_support_indices(self, index, sequence):
     # index should be start index of the clip
@@ -48,7 +49,7 @@ class Davis(VideoDataset):
     support_indices = np.sort(np.append(support_indices, np.repeat([index],
                                                                    self.tw - len(support_indices))))
 
-    print(support_indices)
+    # print(support_indices)
     return support_indices
 
   def create_sample_list(self):
@@ -64,6 +65,7 @@ class Davis(VideoDataset):
     with open(os.path.join(self.root, "ImageSets",_imset_f), "r") as lines:
       for line in lines:
         _video = line.rstrip('\n')
+        self.videos += [_video]
         img_list = list(glob.glob(os.path.join(image_dir, _video, '*.jpg')))
         img_list.sort()
         # self.videos.append(_video)
@@ -92,6 +94,7 @@ class Davis(VideoDataset):
           sample[INFO]['shape'] = np.shape(_mask)
 
           self.samples+=[sample]
+    self.raw_samples = self.samples
 
 
 if __name__ == '__main__':

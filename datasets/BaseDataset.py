@@ -8,7 +8,15 @@ from imageio import imread
 from utils.Resize import resize, ResizeMode
 from torch.utils.data import Dataset
 
-from utils.util import list_to_dict
+
+def list_to_dict(list):
+  """
+
+  :param list: input list
+  :return: converted dictionary
+  """
+  result_dict = {str(i): val for i, val in enumerate(list)}
+  return result_dict
 
 
 class BaseDataset(Dataset):

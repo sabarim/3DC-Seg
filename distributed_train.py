@@ -16,8 +16,8 @@ from utils.AverageMeter import AverageMeter, AverageMeterDict
 from utils.Constants import network_models
 from utils.Saver import load_weights, save_checkpoint
 from utils.dataset import get_dataset
-from utils.util import get_lr_schedulers, show_image_summary, get_model, init_torch_distributed, cleanup_env, \
-    reduce_tensor, is_main_process, synchronize
+from utils.util import show_image_summary, get_model_from_args, init_torch_distributed, cleanup_env, \
+    reduce_tensor, is_main_process, synchronize, get_lr_schedulers_args
 
 NUM_EPOCHS = 400
 TRAIN_KITTI = False
@@ -34,7 +34,7 @@ class Trainer:
         self.writer = SummaryWriter(log_dir="runs/" + args.network_name)
         print("Arguments used: {}".format(args), flush=True)
         self.trainset, self.testset = get_dataset(args)
-        self.model = get_model(args, network_models)
+        self.model = get_model_from_args(args, network_models)
         args.world_size = 1
         print("Using model: {}".format(self.model.__class__), flush=True)
         print(args)
@@ -83,7 +83,7 @@ class Trainer:
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
         model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval, amp_weights = \
             load_weights(model, optimizer, args, self.model_dir, scheduler=None, amp=amp)  # params
-        lr_schedulers = get_lr_schedulers(optimizer, args, start_epoch)
+        lr_schedulers = get_lr_schedulers_args(optimizer, args, start_epoch)
         opt_levels = {'fp32': 'O0', 'fp16': 'O2', 'mixed': 'O1'}
         if args.precision in opt_levels:
             opt_level = opt_levels[args.precision]

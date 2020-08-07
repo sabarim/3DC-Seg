@@ -4,10 +4,59 @@ from collections import OrderedDict
 import numpy as np
 import torch
 from PIL import Image
+from deprecated import deprecated
+
 import utils.Constants as Constants
 from utils.util import ToLabel
 
 
+def load_weightsV2(model, optimiser, wts_file, model_dir):
+  start_epoch = 0
+  start_iter = 0
+  state = model.state_dict()
+  checkpoint = None
+  # load saved model if specified
+  if wts_file is None:
+    # load checkpoint file if it exists -- > file  format checkpoint_<iteration>
+    chkpts = glob.glob(model_dir + "/*.pth")
+    chkpts = [c for c in chkpts if "checkpoint_" in c]
+    if len(chkpts) > 0:
+      chkpts.sort()
+      load_name = chkpts[-1]
+      print('Loading checkpoint {}@Epoch {}{}...'.format(Constants.font.BOLD, load_name, Constants.font.END))
+      checkpoint = torch.load(load_name)
+      start_epoch = checkpoint['epoch'] + 1
+      start_iter = checkpoint['iter'] + 1
+  else:
+    checkpoint = torch.load(wts_file)
+    start_epoch = checkpoint['epoch'] + 1
+    start_iter = checkpoint['iter'] + 1
+    load_name = wts_file
+
+  if checkpoint is not None:
+    checkpoint['model'] = {k.replace('module.', ''): v for k, v in checkpoint['model'].items()}
+    checkpoint_valid = {k: v for k, v in checkpoint['model'].items() if k in state and state[k].shape == v.shape}
+    missing_keys = np.setdiff1d(list(state.keys()), list(checkpoint_valid.keys()))
+
+    if len(missing_keys) > 0:
+      print(missing_keys)
+      print("WARN: {} / {}keys are found missing in the loaded model weights.".format(len(missing_keys),
+                                                                                      len(state.keys())))
+    for key in missing_keys:
+      checkpoint_valid[key] = state[key]
+
+    model.load_state_dict(checkpoint_valid)
+    if 'optimiser' in checkpoint.keys():
+      optimiser.load_state_dict(checkpoint['optimizer'])
+
+    del checkpoint
+    torch.cuda.empty_cache()
+    print('Loaded weights from {}'.format(load_name))
+
+  return model, optimiser, start_epoch, start_iter
+
+
+@deprecated
 def load_weights(model, optimizer, args, model_dir, scheduler, amp = None):
     start_epoch = 0
     best_iou_train = 0
@@ -132,6 +181,16 @@ def save_results(all_E, info, num_frames, path, palette):
     img_E = Image.fromarray(E)
     img_E.putpalette(palette)
     img_E.save(os.path.join(path, '{:05d}.png'.format(f)))
+
+
+def save_checkpointV2(epoch, iter, model, optimiser, save_name):
+  torch.save({'epoch': epoch,
+              'model': model.state_dict(),
+              'optimizer': optimiser.state_dict(),
+              'iter': iter
+              },
+             save_name)
+  print("Saving epoch {}".format(epoch))
 
 
 def save_checkpoint(epoch, iou_mean, loss_mean, model, optimiser, save_name, is_train, scheduler, amp = None):

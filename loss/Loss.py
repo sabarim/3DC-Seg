@@ -2,7 +2,7 @@ import torch
 import numpy as np
 import torch.nn.functional as F
 from loss.SpatialEmbLoss import SpatioTemporalEmbLoss, SpatialEmbLoss, CovarianceLoss, SpatioTemporalLossWithFloatingCentre
-
+from deprecated import deprecated
 from loss.embedding_loss import compute_embedding_loss
 from utils.AverageMeter import AverageMeter
 from utils.Constants import PRED_EMBEDDING, PRED_SEM_SEG, PRED_LOGITS
@@ -18,6 +18,7 @@ def bootstrapped_ce_loss(raw_ce, n_valid_pixels_per_im=None, fraction=0.25):
   return bootstrapped_loss
 
 
+@deprecated(reason="Use loss.loss_utils.compute_loss instead")
 def compute_loss(args, criterion, pred, target, target_extra=None, iou_meter=None):
   """
 

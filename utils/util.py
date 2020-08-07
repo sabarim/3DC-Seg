@@ -1,12 +1,16 @@
 import inspect
+import os
 
 import numpy as np
 import torch
 import torch.distributed as dist
+from deprecated import deprecated
 from torch import nn
 from torch.distributed import all_reduce
 
+from datasets.BaseDataset import BaseDataset
 from network.models import BaseNetwork
+from utils.Constants import ADAM_OPTIMISER
 
 
 def ToOneHot(labels, num_objects):
@@ -73,7 +77,20 @@ def all_subclasses(cls):
   return set(cls.__subclasses__()).union([s for c in cls.__subclasses__() for s in all_subclasses(c)])
 
 
-def get_lr_schedulers(optimiser, args, last_epoch=-1):
+def get_lr_schedulers(optimiser, cfg, last_epoch=-1):
+  last_epoch = -1 if last_epoch ==0 else last_epoch
+  all_schedulers = inspect.getmembers(torch.optim.lr_scheduler)
+  lr_schedulers = []
+
+  if 'exponential' in cfg.SOLVER.LR_SCHEDULERS:
+    lr_schedulers += [torch.optim.lr_scheduler.ExponentialLR(optimiser, gamma=cfg.SOLVER.GAMMA, last_epoch=last_epoch)]
+  if 'step' in cfg.SOLVER.LR_SCHEDULERS:
+    lr_schedulers += [torch.optim.lr_scheduler.MultiStepLR(optimiser, milestones=cfg.SOLVER.STEPS,
+                                                           last_epoch=last_epoch)]
+  return lr_schedulers
+
+@deprecated
+def get_lr_schedulers_args(optimiser, args, last_epoch=-1):
   last_epoch = -1 if last_epoch ==0 else last_epoch
   lr_schedulers = []
   if args.lr_schedulers is None:
@@ -86,22 +103,38 @@ def get_lr_schedulers(optimiser, args, last_epoch=-1):
   return lr_schedulers
 
 
-def show_image_summary(count, foo, input_var, masks_guidance, target, pred):
-  for index in range(input_var.shape[2]):
-    foo.add_images("data/input" + str(index), input_var[:, :3, index], count)
-    if masks_guidance is not None:
-      tensor = masks_guidance[:, :, index] if len(masks_guidance.shape) > 4 else masks_guidance
-      foo.add_images("data/guidance" + str(index), tensor.repeat(1, 3, 1, 1), count)
-  # foo.add_image("data/loss_image", loss_image.unsqueeze(1), count)
-  if len(target.shape) < 5:
-    target = target.unsqueeze(2)
-    pred = pred.unsqueeze(2)
-  for index in range(target.shape[2]):
-    foo.add_images("data/target"+ str(index), target[:, :, index].repeat(1,3,1,1), count)
-    foo.add_images("data/pred"+ str(index), torch.argmax(pred, dim=1)[:, index].unsqueeze(1).repeat(1,3,1,1), count)
+def show_image_summary(count, foo, in_dict, target_dict, pred_dict):
+  # show inputs
+  for k, v in in_dict.items():
+    if len(v.shape) < 5:
+      v = v.unsqueeze(2)
+    for index in range(v.shape[2]):
+      foo.add_images("data/{}_{}".format(k, index), v[:, :3, index], count)
+
+  # show targets
+  for k, v in target_dict.items():
+    if len(v.shape) < 5:
+      target = v.unsqueeze(2)
+      for index in range(target.shape[2]):
+        foo.add_images("data/{}_{}".format(k, str(index)), target[:, :, index].repeat(1, 3, 1, 1), count)
+
+    # show predictions
+  for k, v in pred_dict.items():
+    pred = v.unsqueeze(2)
+    for index in range(pred.shape[2]):
+      foo.add_images("pred/{}_{}".format(k, str(index)), pred[:, index].unsqueeze(1).repeat(1,3,1,1), count)
 
 
-def get_model(args, network_models):
+def get_model(cfg):
+  model_classes = all_subclasses(BaseNetwork)
+  class_index = [cls.__name__ for cls in model_classes].index(cfg.MODEL.NETWORK)
+  model_class = list(model_classes)[class_index]
+  model = model_class(cfg)
+  # if cfg.MODEL.PRETRAINED:
+  #   model.load_pretrained(cfg.MODEL.WEIGHTS)
+  return model
+
+def get_model_from_args(args, network_models):
   model_classes = all_subclasses(BaseNetwork)
   modules = all_subclasses(nn.Module)
   class_index = [cls.__name__ for cls in model_classes].index(network_models[args.network])
@@ -128,12 +161,90 @@ def get_model(args, network_models):
   return model
 
 
+def get_datasets(cfg):
+  dataset_classes = all_subclasses(BaseDataset)
+  class_index = [cls.__name__ for cls in dataset_classes].index(cfg.DATASETS.TRAIN)
+  train_dataset_class = list(dataset_classes)[class_index]
+  train_dataset = build_dataset(train_dataset_class, True, cfg)
+
+  class_index = [cls.__name__ for cls in dataset_classes].index(cfg.DATASETS.TEST)
+  test_dataset_class = list(dataset_classes)[class_index]
+  test_dataset = build_dataset(test_dataset_class, False, cfg)
+
+  return train_dataset, test_dataset
+
+
+def build_dataset(_class, is_train, cfg):
+  spec = inspect.signature(_class.__init__)
+  fn_args = spec._parameters
+  params = {}
+  params['root'] = cfg.DATASETS.TRAIN_ROOT if is_train else cfg.DATASETS.TEST_ROOT
+  params['mode'] = 'train' if is_train else "test"
+  params['resize_mode'] = cfg.INPUT.RESIZE_MODE_TRAIN if is_train else cfg.INPUT.RESIZE_MODE_TEST
+  params['resize_shape'] = cfg.INPUT.RESIZE_SHAPE_TRAIN if is_train else cfg.INPUT.RESIZE_SHAPE_TEST
+
+  cfg_params = dict(cfg.items())['DATASETS']
+  missing_params = []
+  for p in fn_args:
+    if p.upper() in  cfg_params:
+      params[str(p)] = cfg_params[p.upper()]
+    else:
+      missing_params += [p]
+
+  print("Dataset parameters {} are missing in the config file.".format(missing_params))
+  # params['random_instance'] = cfg.DATASETS.RANDOM_INSTANCE
+  dataset = _class(**params)
+
+  return dataset
+
+
+def get_optimiser(model, cfg):
+  if cfg.TRAINING.OPTIMISER == ADAM_OPTIMISER:
+    opt = torch.optim.Adam(model.parameters(), lr=cfg.TRAINING.BASE_LR)
+  else:
+    raise ValueError("Unknown optimiser {}".format(cfg.TRAINING.OPTIMISER))
+
+  return opt
+
+
+def _find_free_port():
+  import socket
+  port_range = list(range(1230, 1250))
+  port_range += list(range(8085, 8099))
+  sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  for port in port_range:
+    try:
+      sock.bind(('', port))
+      sock.close()
+      return port
+    except OSError:
+      continue
+  # NOTE: there is still a chance the port could be taken by other processes.
+  return port
+
+
 def init_torch_distributed():
   print("devices available: {}".format(torch.cuda.device_count()))
-  torch.distributed.init_process_group(
-    'nccl',
-    init_method='env://',
-  )
+  port = _find_free_port()
+  print("Using port {} for torch distributed.".format(port))
+  if torch.cuda.is_available() and torch.cuda.device_count() > 1:
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = str(port)
+    torch.distributed.init_process_group(
+      'nccl',
+      init_method='env://',
+    )
+  else:
+    dist_url = "tcp://127.0.0.1:{}".format(port)
+    try:
+      dist.init_process_group(
+        backend="NCCL",
+        init_method=dist_url, world_size=1, rank=0
+      )
+    except Exception as e:
+      print("Process group URL: {}".format(dist_url))
+      raise e
+
 
 def get_rank():
   if not dist.is_available():
@@ -177,3 +288,4 @@ def reduce_tensor(tensor, args):
   all_reduce(rt, op=ReduceOp.SUM)
   rt /= args.world_size
   return rt
+
