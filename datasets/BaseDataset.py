@@ -60,13 +60,25 @@ class BaseDataset(Dataset):
     # targets = map(imread, sample['targets'])
     targets = map(lambda x: np.array( Image.open(x).convert('P'), dtype=np.uint8), sample['targets'])
 
-    images = list_to_dict(images)
-    images = resize(images, self.resize_mode, self.resize_shape)
-    images = np.stack(images.values())
+    # images = list_to_dict(images)
+    # images = resize(images, self.resize_mode, self.resize_shape)
+    # images = np.stack(images.values())
 
-    targets = list_to_dict(targets)
-    targets = resize(targets, self.resize_mode, self.resize_shape)
-    targets = np.stack(targets.values())
+    # targets = list_to_dict(targets)
+    # targets = resize(targets, self.resize_mode, self.resize_shape)
+    # targets = np.stack(targets.values())
+
+    images_resized = []
+    targets_resized = []
+    for im, t in zip(images, targets):
+      # data = {"images": images, "targets": targets}
+      data = {"image": im, "mask": t}
+      data = resize(data, self.resize_mode, self.resize_shape)
+      images_resized += [data['image']]
+      targets_resized += [data['mask']]
+
+    images = np.stack(images_resized)
+    targets = np.stack(targets_resized)
 
     data = {"images": images, "targets": targets}
     for key, val in sample.items():
@@ -146,6 +158,7 @@ class VideoDataset(BaseDataset):
                    ((0,0),(lh, uh), (lw, uw), (0, 0)),
                    mode='constant')
 
+    padded_tensors['info'][0]['pad'] = ((lh, uh), (lw, uw))
     return padded_tensors
 
   def __getitem__(self, idx):

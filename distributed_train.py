@@ -17,7 +17,7 @@ from utils.Constants import network_models
 from utils.Saver import load_weights, save_checkpoint
 from utils.dataset import get_dataset
 from utils.util import show_image_summary, get_model_from_args, init_torch_distributed, cleanup_env, \
-    reduce_tensor, is_main_process, synchronize, get_lr_schedulers_args
+    reduce_tensor, is_main_process, synchronize, get_lr_schedulers_args, _find_free_port
 
 NUM_EPOCHS = 400
 TRAIN_KITTI = False
@@ -77,7 +77,9 @@ class Trainer:
 
     def init_distributed(self, args):
         torch.cuda.set_device(args.local_rank)
-        init_torch_distributed()
+        port = _find_free_port()
+        port = "8086"
+        init_torch_distributed(port)
         model = apex.parallel.convert_syncbn_model(self.model)
         model.cuda()
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -163,6 +165,13 @@ class Trainer:
                            args.world_size * args.bs / batch_time.avg,
                     batch_time=batch_time, loss=self.losses, iou=self.ious,
                     loss_extra=self.losses_extra, iou_extra=self.ious_extra), flush=True)
+
+                if self.iteration % 10000 == 0:
+                    if not os.path.exists(self.model_dir):
+                        os.makedirs(self.model_dir)
+                    save_name = '{}/{}.pth'.format(self.model_dir, self.iteration)
+                    save_checkpoint(self.epoch, self.ious.avg, self.losses.avg, self.model, self.optimiser, save_name,
+                                    is_train=True,scheduler=None, amp=amp)
 
         if args.local_rank == 0:
             print('Finished Train Epoch {} Loss {losses.avg:.5f} Loss Extra {losses_extra.avg} IOU {iou.avg: .2f} '

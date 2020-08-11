@@ -14,13 +14,14 @@ from torchsummary import summary
 
 from Forward import format_pred
 from config import get_cfg
+from inference_handlers.infer_utils.util import get_inference_engine
 from loss.loss_utils import compute_loss
 # Constants
 from utils.Argparser import parse_args, parse_argsV2
 from utils.AverageMeter import AverageMeter, AverageMeterDict
 from utils.Saver import load_weights, save_checkpointV2, load_weightsV2
 from utils.util import get_lr_schedulers, show_image_summary, get_model, init_torch_distributed, cleanup_env, \
-  reduce_tensor, is_main_process, synchronize, get_datasets, get_optimiser, init_torch_distributed
+  reduce_tensor, is_main_process, synchronize, get_datasets, get_optimiser, init_torch_distributed, _find_free_port
 
 NUM_EPOCHS = 400
 TRAIN_KITTI = False
@@ -32,10 +33,11 @@ torch.backends.cudnn.benchmark = True
 
 
 class Trainer:
-  def __init__(self, args):
+  def __init__(self, args, port):
     cfg = get_cfg()
     cfg.merge_from_file(args.config)
     self.cfg = cfg
+    self.port = port
     assert os.path.exists('saved_models'), "Create a path to save the trained models: <default: ./saved_models> "
     self.model_dir = os.path.join('saved_models', cfg.NAME)
     self.writer = SummaryWriter(log_dir=os.path.join(self.model_dir, "summary"))
@@ -84,7 +86,7 @@ class Trainer:
 
   def init_distributed(self, cfg):
     torch.cuda.set_device(args.local_rank)
-    init_torch_distributed()
+    init_torch_distributed(self.port)
     model = apex.parallel.convert_syncbn_model(self.model)
     model.cuda()
     optimiser = get_optimiser(model, cfg)
@@ -146,7 +148,7 @@ class Trainer:
       else:
         reduced_loss = dict([(key, val.data.item()) for key, val in loss_dict.items()])
 
-      self.losses.update(reduced_loss, args.world_size)
+      self.losses.update(reduced_loss, self.world_size)
 
       for k, v in self.losses.val.items():
         self.writer.add_scalar("loss_{}".format(k), v, self.iteration)
@@ -158,10 +160,10 @@ class Trainer:
       batch_time.update((time.time() - end) / args.print_freq)
       end = time.time()
 
-      loss_str = ' '.join(["{}:{:4f}({:4f})".format(k, self.losses.val[k], self.losses.avg[k]) for k, v in self.losses.val.items()])
+      loss_str = ' '.join(["{}:{:4f}({:4f})".format(k, self.losses.val[k] / self.world_size, self.losses.avg[k])
+                           for k, v in self.losses.val.items()])
 
       if args.local_rank == 0:
-        print(self.world_size*len(self.trainloader))
         print('[Iter: {0}]Epoch: [{1}][{2}/{3}]\t'
               'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
               'Data Time {data_time.val:.3f} ({data_time.avg:.3f})\t'
@@ -169,7 +171,7 @@ class Trainer:
           self.iteration, self.epoch, i * self.world_size * self.batch_size,
                                       len(self.trainloader) * self.batch_size * self.world_size,
                                       self.world_size * self.batch_size / batch_time.val,
-          args.world_size * self.batch_size / batch_time.avg,
+          self.world_size * self.batch_size / batch_time.avg,
           batch_time=batch_time, data_time = data_time, loss=loss_str), flush=True)
 
         if self.iteration % 10000 == 0:
@@ -290,6 +292,9 @@ class Trainer:
 
     elif args.task == 'eval':
       self.eval()
+    elif args.task == 'infer':
+      inference_engine = get_inference_engine(self.cfg)
+      inference_engine.infer(self.testset, self.model)
     else:
       raise ValueError("Unknown task {}".format(args.task))
 
@@ -326,7 +331,8 @@ def register_interrupt_signals(trainer):
 
 if __name__ == '__main__':
   args = parse_argsV2()
-  trainer = Trainer(args)
+  port = _find_free_port()
+  trainer = Trainer(args, port)
   register_interrupt_signals(trainer)
   trainer.start()
   if args.local_rank == 0:

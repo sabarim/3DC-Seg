@@ -87,6 +87,18 @@ _C.DATASETS.TEST = ""
 _C.DATASETS.TEST_ROOT = ""
 # dataset parameters
 _C.DATASETS.RANDOM_INSTANCE = False
+# max temporal gap to use while sampling input frames
+_C.DATASETS.MAX_TEMPORAL_GAP = 8
+
+
+# -----------------------------------------------------------------------------
+# Inference settings
+# -----------------------------------------------------------------------------
+_C.INFERENCE = CN()
+_C.INFERENCE.ENGINE = ""
+_C.INFERENCE.EXHAUSTIVE = False
+_C.INFERENCE.CLIP_OVERLAP = 3
+_C.INFERENCE.SAVE_LOGITS = False
 
 
 # -----------------------------------------------------------------------------

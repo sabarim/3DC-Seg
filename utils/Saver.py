@@ -34,7 +34,7 @@ def load_weightsV2(model, optimiser, wts_file, model_dir):
     load_name = wts_file
 
   if checkpoint is not None:
-    checkpoint['model'] = {k.replace('module.', ''): v for k, v in checkpoint['model'].items()}
+    # checkpoint['model'] = {k.replace('module.', ''): v for k, v in checkpoint['model'].items()}
     checkpoint_valid = {k: v for k, v in checkpoint['model'].items() if k in state and state[k].shape == v.shape}
     missing_keys = np.setdiff1d(list(state.keys()), list(checkpoint_valid.keys()))
 

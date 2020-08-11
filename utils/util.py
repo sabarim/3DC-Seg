@@ -134,6 +134,7 @@ def get_model(cfg):
   #   model.load_pretrained(cfg.MODEL.WEIGHTS)
   return model
 
+
 def get_model_from_args(args, network_models):
   model_classes = all_subclasses(BaseNetwork)
   modules = all_subclasses(nn.Module)
@@ -163,11 +164,18 @@ def get_model_from_args(args, network_models):
 
 def get_datasets(cfg):
   dataset_classes = all_subclasses(BaseDataset)
-  class_index = [cls.__name__ for cls in dataset_classes].index(cfg.DATASETS.TRAIN)
+  try:
+    class_index = [cls.__name__ for cls in dataset_classes].index(cfg.DATASETS.TRAIN)
+  except:
+    raise ValueError("Dataset {} not found.".format(cfg.DATASETS.TRAIN))
+
   train_dataset_class = list(dataset_classes)[class_index]
   train_dataset = build_dataset(train_dataset_class, True, cfg)
 
-  class_index = [cls.__name__ for cls in dataset_classes].index(cfg.DATASETS.TEST)
+  try:
+    class_index = [cls.__name__ for cls in dataset_classes].index(cfg.DATASETS.TEST)
+  except:
+    raise ValueError("Dataset {} not found.".format(cfg.DATASETS.TEST))
   test_dataset_class = list(dataset_classes)[class_index]
   test_dataset = build_dataset(test_dataset_class, False, cfg)
 
@@ -183,10 +191,14 @@ def build_dataset(_class, is_train, cfg):
   params['resize_mode'] = cfg.INPUT.RESIZE_MODE_TRAIN if is_train else cfg.INPUT.RESIZE_MODE_TEST
   params['resize_shape'] = cfg.INPUT.RESIZE_SHAPE_TRAIN if is_train else cfg.INPUT.RESIZE_SHAPE_TEST
 
-  cfg_params = dict(cfg.items())['DATASETS']
+  # cfg_params = dict(cfg.items())['DATASETS']
+  cfg_params = dict(list(dict(cfg.items())['INPUT'].items()) + list(dict(cfg.items())['DATASETS'].items()))
   missing_params = []
   for p in fn_args:
-    if p.upper() in  cfg_params:
+    if p in params:
+      continue
+
+    if p.upper() in cfg_params:
       params[str(p)] = cfg_params[p.upper()]
     else:
       missing_params += [p]
@@ -223,9 +235,9 @@ def _find_free_port():
   return port
 
 
-def init_torch_distributed():
+def init_torch_distributed(port):
   print("devices available: {}".format(torch.cuda.device_count()))
-  port = _find_free_port()
+  #port = _find_free_port()
   print("Using port {} for torch distributed.".format(port))
   if torch.cuda.is_available() and torch.cuda.device_count() > 1:
     os.environ['MASTER_ADDR'] = 'localhost'
