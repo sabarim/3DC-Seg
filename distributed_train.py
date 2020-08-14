@@ -29,7 +29,7 @@ torch.backends.cudnn.benchmark=True
 
 
 class Trainer:
-    def __init__(self, args):
+    def __init__(self, args, port):
         self.model_dir = os.path.join('saved_models', args.network_name)
         self.writer = SummaryWriter(log_dir="runs/" + args.network_name)
         print("Arguments used: {}".format(args), flush=True)
@@ -39,6 +39,7 @@ class Trainer:
         print("Using model: {}".format(self.model.__class__), flush=True)
         print(args)
         self.args = args
+        self.port = port
         self.iteration = 0
         self.epoch = 0
         self.best_iou_train = 0
@@ -77,9 +78,9 @@ class Trainer:
 
     def init_distributed(self, args):
         torch.cuda.set_device(args.local_rank)
-        port = _find_free_port()
-        port = "8086"
-        init_torch_distributed(port)
+        # port = _find_free_port()
+        # port = "8086"
+        init_torch_distributed(self.port)
         model = apex.parallel.convert_syncbn_model(self.model)
         model.cuda()
         optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
@@ -343,9 +344,10 @@ def register_interrupt_signals(trainer):
 
 if __name__ == '__main__':
     args = parse_args()
+    port = _find_free_port()
     if not os.path.exists("runs/" + args.network_name) and is_main_process():
         os.makedirs("runs/" + args.network_name)
-    trainer = Trainer(args)
+    trainer = Trainer(args, port)
     register_interrupt_signals(trainer)
     trainer.start()
     trainer.backup_session(signal.SIGQUIT, None)

@@ -1,3 +1,5 @@
+from functools import reduce
+
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -125,15 +127,19 @@ class SaliencyNetwork(BaseNetwork):
   def __init__(self, cfg):
     super(SaliencyNetwork, self).__init__()
     self.encoder = Encoder3d(cfg.MODEL.BACKBONE, cfg.INPUT.TW, cfg.MODEL.PIXEL_MEAN, cfg.MODEL.PIXEL_STD)
-    self.decoder = Decoder3d(cfg.MODEL.N_CLASSES, inter_block=cfg.MODEL.DECODER.INTER_BLOCK,
-                             refine_block=cfg.MODEL.DECODER.REFINE_BLOCK)
+    decoders = [Decoder3d(cfg.MODEL.N_CLASSES, inter_block=cfg.MODEL.DECODER.INTER_BLOCK,
+                             refine_block=cfg.MODEL.DECODER.REFINE_BLOCK)]
+    self.decoders = nn.ModuleList()
+    for decoder in decoders:
+      self.decoders.append(decoder)
     if cfg.MODEL.FREEZE_BN:
       self.encoder.freeze_batchnorm()
 
   def forward(self, x, ref=None):
-    if ref is not None and len(ref.shape) == 4:
-      r5, r4, r3, r2 = self.encoder.forward(x, ref.unsqueeze(2))
-    else:
-      r5, r4, r3, r2 = self.encoder.forward(x, ref)
-    p = self.decoder.forward(r5, r4, r3, r2, None)
-    return [p]
+    r5, r4, r3, r2 = self.encoder.forward(x, ref)
+    flatten = lambda lst: [lst] if type(lst) is torch.Tensor else reduce(torch.add, [flatten(ele) for ele in lst])
+    p = flatten([decoder.forward(r5, r4, r3, r2, None) for decoder in self.decoders])
+    # e = self.decoder_embedding.forward(r5, r4, r3, r2, None)
+    return p
+    # p = self.decoder.forward(r5, r4, r3, r2, None)
+    # return [p]

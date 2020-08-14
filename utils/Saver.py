@@ -29,12 +29,12 @@ def load_weightsV2(model, optimiser, wts_file, model_dir):
       start_iter = checkpoint['iter'] + 1
   else:
     checkpoint = torch.load(wts_file)
-    start_epoch = checkpoint['epoch'] + 1
-    start_iter = checkpoint['iter'] + 1
+    start_epoch = checkpoint['epoch'] + 1 if 'epoch' in checkpoint else 0
+    start_iter = checkpoint['iter'] + 1 if 'iter' in checkpoint else 0
     load_name = wts_file
 
   if checkpoint is not None:
-    # checkpoint['model'] = {k.replace('module.', ''): v for k, v in checkpoint['model'].items()}
+    checkpoint['model'] = {k.replace('module.', ''): v for k, v in checkpoint['model'].items()}
     checkpoint_valid = {k: v for k, v in checkpoint['model'].items() if k in state and state[k].shape == v.shape}
     missing_keys = np.setdiff1d(list(state.keys()), list(checkpoint_valid.keys()))
 
@@ -46,8 +46,13 @@ def load_weightsV2(model, optimiser, wts_file, model_dir):
       checkpoint_valid[key] = state[key]
 
     model.load_state_dict(checkpoint_valid)
-    if 'optimiser' in checkpoint.keys():
-      optimiser.load_state_dict(checkpoint['optimizer'])
+    if 'optimizer' in checkpoint.keys():
+      try:
+        optimiser.load_state_dict(checkpoint['optimizer'])
+      except:
+        print("WARN: Optimiser state could not be resumed. Resetting start epoch to 0....")
+        start_epoch = 0
+        start_iter = 0
 
     del checkpoint
     torch.cuda.empty_cache()

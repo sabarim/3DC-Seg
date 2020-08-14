@@ -17,6 +17,7 @@ from config import get_cfg
 from inference_handlers.infer_utils.util import get_inference_engine
 from loss.loss_utils import compute_loss
 # Constants
+from network.Resnet3dAgg import ResnetCSN
 from utils.Argparser import parse_args, parse_argsV2
 from utils.AverageMeter import AverageMeter, AverageMeterDict
 from utils.Saver import load_weights, save_checkpointV2, load_weightsV2
@@ -41,10 +42,13 @@ class Trainer:
     assert os.path.exists('saved_models'), "Create a path to save the trained models: <default: ./saved_models> "
     self.model_dir = os.path.join('saved_models', cfg.NAME)
     self.writer = SummaryWriter(log_dir=os.path.join(self.model_dir, "summary"))
+    self.iteration = 0
     print("Arguments used: {}".format(args), flush=True)
 
     self.trainset, self.testset = get_datasets(cfg)
     self.model = get_model(cfg)
+    print("Using model: {}".format(self.model.__class__), flush=True)
+
     if torch.cuda.is_available() and torch.cuda.device_count() > 1:
       self.model, self.optimiser = self.init_distributed(cfg)
     # TODO: do not use distributed package in this case
@@ -53,27 +57,27 @@ class Trainer:
     else:
       raise RuntimeError("CUDA not available.")
 
-    self.model, self.optimiser, self.start_epoch, start_iter = \
-      load_weightsV2(self.model, self.optimiser, args.wts, self.model_dir)
+    # self.model, self.optimiser, self.start_epoch, start_iter = \
+    #   load_weightsV2(self.model, self.optimiser, args.wts, self.model_dir)
     self.lr_schedulers = get_lr_schedulers(self.optimiser, cfg, self.start_epoch)
     self.batch_size = self.cfg.TRAINING.BATCH_SIZE
-
-    print("Using model: {}".format(self.model.__class__), flush=True)
 
     args.world_size = 1
     print(args)
     self.args = args
-    self.iteration = start_iter
     self.epoch = 0
     self.best_loss_train = math.inf
     self.losses = AverageMeterDict()
     self.ious = AverageMeterDict()
 
     num_samples = None if cfg.DATALOADER.NUM_SAMPLES == -1 else cfg.DATALOADER.NUM_SAMPLES
-    # shuffle parameter does not seem to shuffle the data for distributed sampler
-    self.train_sampler = torch.utils.data.distributed.DistributedSampler(
-      torch.utils.data.RandomSampler(self.trainset, replacement=True, num_samples=num_samples),
-      shuffle=True)
+    if torch.cuda.device_count() > 1:
+      # shuffle parameter does not seem to shuffle the data for distributed sampler
+      self.train_sampler = torch.utils.data.distributed.DistributedSampler(
+        torch.utils.data.RandomSampler(self.trainset, replacement=True, num_samples=num_samples),
+        shuffle=True)
+    else:
+      self.train_sampler = torch.utils.data.RandomSampler(self.trainset, replacement=True, num_samples=num_samples)
     shuffle = True if self.train_sampler is None else False
     self.trainloader = DataLoader(self.trainset, batch_size=self.batch_size, num_workers=cfg.DATALOADER.NUM_WORKERS,
                                   shuffle=shuffle, sampler=self.train_sampler)
@@ -90,6 +94,8 @@ class Trainer:
     model = apex.parallel.convert_syncbn_model(self.model)
     model.cuda()
     optimiser = get_optimiser(model, cfg)
+    model, optimiser, self.start_epoch, self.iteration = \
+      load_weightsV2(model, optimiser, args.wts, self.model_dir)
     # model, optimizer, start_epoch, best_iou_train, best_iou_eval, best_loss_train, best_loss_eval, amp_weights = \
     #   load_weights(model, self.optimiser, args, self.model_dir, scheduler=None, amp=amp)  # params
     # lr_schedulers = get_lr_schedulers(optimizer, args, start_epoch)
@@ -101,10 +107,10 @@ class Trainer:
       print('WARN: Precision string is not understood. Falling back to fp32')
     model, optimiser = amp.initialize(model, optimiser, opt_level=opt_level)
     # amp.load_state_dict(amp_weights)
-    model = apex.parallel.DistributedDataParallel(model, delay_allreduce=True)
-    args.world_size = torch.distributed.get_world_size()
+    if torch.cuda.device_count() > 1:
+      model = apex.parallel.DistributedDataParallel(model, delay_allreduce=True)
     self.world_size = torch.distributed.get_world_size()
-    print("Intitialised distributed with world size {} and rank {}".format(args.world_size, args.local_rank))
+    print("Intitialised distributed with world size {} and rank {}".format(self.world_size, args.local_rank))
     return model, optimiser
 
   def train(self):
@@ -171,7 +177,7 @@ class Trainer:
           self.iteration, self.epoch, i * self.world_size * self.batch_size,
                                       len(self.trainloader) * self.batch_size * self.world_size,
                                       self.world_size * self.batch_size / batch_time.val,
-          self.world_size * self.batch_size / batch_time.avg,
+                                      self.world_size * self.batch_size / batch_time.avg,
           batch_time=batch_time, data_time = data_time, loss=loss_str), flush=True)
 
         if self.iteration % 10000 == 0:
@@ -197,7 +203,10 @@ class Trainer:
     print("Starting validation for epoch {}".format(self.epoch), flush=True)
     for seq in self.testset.get_video_ids():
       self.testset.set_video_id(seq)
-      test_sampler = torch.utils.data.distributed.DistributedSampler(self.testset, shuffle=False)
+      if torch.cuda.device_count() > 1:
+        test_sampler = torch.utils.data.distributed.DistributedSampler(self.testset, shuffle=False)
+      else:
+        test_sampler = None
       # test_sampler.set_epoch(epoch)
       testloader = DataLoader(self.testset, batch_size=1, num_workers=1, shuffle=False, sampler=test_sampler,
                               pin_memory=True)
