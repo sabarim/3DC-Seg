@@ -3,6 +3,7 @@ import zipfile
 
 import numpy as np
 from PIL import Image
+from deprecated import deprecated
 
 from imgaug import augmenters as iaa
 from torch.utils.data import Dataset
@@ -20,6 +21,7 @@ COCO_SUPERCATEGORIES = ["outdoor", "food", "indoor", "appliance", "sports", "per
 
 
 # @register_dataset(NAME)
+@deprecated(reason="Use COCOv2 instead..")
 class COCODataset(Dataset):
   def __init__(self, root, is_train=False, crop_size=None,temporal_window=8, resize_mode=ResizeMode.FIXED_SIZE):
     self.crop_size = crop_size

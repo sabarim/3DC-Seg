@@ -1,3 +1,4 @@
+VERSION: 2
 MODEL:
   NETWORK: "SaliencyNetwork"
   PRETRAINED: True

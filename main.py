@@ -77,7 +77,8 @@ class Trainer:
         torch.utils.data.RandomSampler(self.trainset, replacement=True, num_samples=num_samples),
         shuffle=True)
     else:
-      self.train_sampler = torch.utils.data.RandomSampler(self.trainset, replacement=True, num_samples=num_samples)
+      self.train_sampler = torch.utils.data.RandomSampler(self.trainset, replacement=True, num_samples=num_samples) \
+        if num_samples is not None else None
     shuffle = True if self.train_sampler is None else False
     self.trainloader = DataLoader(self.trainset, batch_size=self.batch_size, num_workers=cfg.DATALOADER.NUM_WORKERS,
                                   shuffle=shuffle, sampler=self.train_sampler)
@@ -150,11 +151,11 @@ class Trainer:
       # Average loss and accuracy across processes for logging
       if torch.cuda.device_count() > 1:
         reduced_loss = dict(
-          [(key, reduce_tensor(val, args).data.item()) for key, val in loss_dict.items()])
+          [(key, reduce_tensor(val, self.world_size).data.item()) for key, val in loss_dict.items()])
       else:
         reduced_loss = dict([(key, val.data.item()) for key, val in loss_dict.items()])
 
-      self.losses.update(reduced_loss, self.world_size)
+      self.losses.update(reduced_loss)
 
       for k, v in self.losses.val.items():
         self.writer.add_scalar("loss_{}".format(k), v, self.iteration)
@@ -166,7 +167,7 @@ class Trainer:
       batch_time.update((time.time() - end) / args.print_freq)
       end = time.time()
 
-      loss_str = ' '.join(["{}:{:4f}({:4f})".format(k, self.losses.val[k] / self.world_size, self.losses.avg[k])
+      loss_str = ' '.join(["{}:{:4f}({:4f})".format(k, self.losses.val[k], self.losses.avg[k])
                            for k, v in self.losses.val.items()])
 
       if args.local_rank == 0:
@@ -234,7 +235,7 @@ class Trainer:
           # Average loss and accuracy across processes for logging
           if torch.cuda.device_count() > 1:
             reduced_loss = dict(
-              [(key, reduce_tensor(val, args).data.item()) for key, val in loss_dict.items()])
+              [(key, reduce_tensor(val, self.world_size).data.item()) for key, val in loss_dict.items()])
           else:
             reduced_loss = dict([(key, val.data.item()) for key, val in loss_dict.items()])
 

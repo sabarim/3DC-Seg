@@ -4,12 +4,8 @@ import random
 import numpy as np
 from PIL import Image
 
-from datasets.BaseDataset import VideoDataset
+from datasets.BaseDataset import VideoDataset, INFO, IMAGES_, TARGETS
 from utils.Resize import ResizeMode
-
-TARGETS = 'targets'
-IMAGES_ = 'images'
-INFO = 'info'
 
 
 class Davis(VideoDataset):

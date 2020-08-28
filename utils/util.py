@@ -294,10 +294,10 @@ def cleanup_env():
   print("Destroying distributed processes.")
   torch.distributed.destroy_process_group()
 
-def reduce_tensor(tensor, args):
+def reduce_tensor(tensor, world_size):
   from apex.parallel import ReduceOp
   rt = tensor.clone()
   all_reduce(rt, op=ReduceOp.SUM)
-  rt /= args.world_size
+  rt /= world_size
   return rt
 

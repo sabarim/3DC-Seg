@@ -9,6 +9,11 @@ from utils.Resize import resize, ResizeMode
 from torch.utils.data import Dataset
 
 
+TARGETS = 'targets'
+IMAGES_ = 'images'
+INFO = 'info'
+
+
 def list_to_dict(list):
   """
 
@@ -56,17 +61,8 @@ class BaseDataset(Dataset):
     return padded_tensors
 
   def read_sample(self, sample):
-    images = map(imread, sample['images'])
-    # targets = map(imread, sample['targets'])
-    targets = map(lambda x: np.array( Image.open(x).convert('P'), dtype=np.uint8), sample['targets'])
-
-    # images = list_to_dict(images)
-    # images = resize(images, self.resize_mode, self.resize_shape)
-    # images = np.stack(images.values())
-
-    # targets = list_to_dict(targets)
-    # targets = resize(targets, self.resize_mode, self.resize_shape)
-    # targets = np.stack(targets.values())
+    images = self.read_image(sample)
+    targets = self.read_target(sample)
 
     images_resized = []
     targets_resized = []
@@ -89,6 +85,12 @@ class BaseDataset(Dataset):
       else:
         data[key] = [val]
     return data
+
+  def read_target(self, sample):
+    return map(lambda x: np.array(Image.open(x).convert('P'), dtype=np.uint8), sample['targets'])
+
+  def read_image(self, sample):
+    return map(imread, sample['images'])
 
   def __len__(self):
     return len(self.samples)
