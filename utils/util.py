@@ -10,7 +10,7 @@ from torch.distributed import all_reduce
 
 from datasets.BaseDataset import BaseDataset
 from network.models import BaseNetwork
-from utils.Constants import ADAM_OPTIMISER
+from utils.Constants import ADAM_OPTIMISER, PRED_LOGITS, PRED_EMBEDDING, PRED_SEM_SEG
 
 
 def ToOneHot(labels, num_objects):
@@ -301,3 +301,21 @@ def reduce_tensor(tensor, world_size):
   rt /= world_size
   return rt
 
+
+def format_pred(pred):
+  """
+
+  :param pred: raw model predcitions
+  :return: dict with formatted model predictions
+  """
+  if type(pred) is not list:
+    f_dict = {('%s' % PRED_LOGITS): pred}
+  elif len(pred) == 1:
+    f_dict = {PRED_LOGITS: pred[0]}
+  elif len(pred) == 2:
+    f_dict = {PRED_LOGITS: pred[0], PRED_EMBEDDING: pred[1]}
+  elif len(pred) == 3:
+    f_dict = {PRED_LOGITS: pred[0], PRED_SEM_SEG: pred[1], PRED_EMBEDDING: pred[2]}
+  else:
+    f_dict = None
+  return f_dict

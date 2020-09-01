@@ -8,7 +8,7 @@ from torch.nn import functional as F
 # cluster module
 from torch.utils.data import DataLoader
 
-from Forward import format_pred
+from utils.util import format_pred
 from inference_handlers.infer_utils.LinearTubeStitching import stitch_clips_best_overlap
 from inference_handlers.infer_utils.StitchWithGT import stitch_with_gt
 from inference_handlers.infer_utils.Visualisation import visualize_embeddings

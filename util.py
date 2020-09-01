@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from lib import cv2_util
+from utils import cv2_util
 from utils.util import get_iou
 
 

@@ -1,28 +1,26 @@
+import math
 import os
 import signal
 import time
 
 import apex
-import math
 import torch
 from apex import amp
 # from inference_handlers.inference import infer
-from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
 
-from Forward import format_pred
 from config import get_cfg
 from inference_handlers.infer_utils.util import get_inference_engine
 from loss.loss_utils import compute_loss
 # Constants
-from network.Resnet3dAgg import ResnetCSN
-from utils.Argparser import parse_args, parse_argsV2
+from utils.Argparser import parse_argsV2
 from utils.AverageMeter import AverageMeter, AverageMeterDict
-from utils.Saver import load_weights, save_checkpointV2, load_weightsV2
-from utils.util import get_lr_schedulers, show_image_summary, get_model, init_torch_distributed, cleanup_env, \
-  reduce_tensor, is_main_process, synchronize, get_datasets, get_optimiser, init_torch_distributed, _find_free_port
+from utils.Saver import save_checkpointV2, load_weightsV2
+from utils.util import get_lr_schedulers, show_image_summary, get_model, cleanup_env, \
+  reduce_tensor, is_main_process, synchronize, get_datasets, get_optimiser, init_torch_distributed, _find_free_port, \
+  format_pred
 
 NUM_EPOCHS = 400
 TRAIN_KITTI = False

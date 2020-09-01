@@ -1,16 +1,12 @@
 import glob
 import os
 import random
-from PIL import Image
-from torch.utils import data
-import torch
-import numpy as np
-import pycocotools.mask as cocomask
 
-from datasets.DAVIS import DAVIS
+import numpy as np
+from PIL import Image
+
 from datasets.DAVIS16 import DAVIS16
 from datasets.coco.COCO import COCO_SUPERCATEGORIES
-from datasets.utils.Util import generate_clip_from_image
 from utils.Constants import KITTI_ROOT
 from utils.Resize import ResizeMode, resize
 
