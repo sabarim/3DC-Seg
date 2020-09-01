@@ -53,7 +53,7 @@ class VisalDataset(Davis):
             else:
                 raw_mask = np.zeros(sample[INFO]['shape']).astype(np.uint8)
                 mask_void = (np.ones_like(raw_mask) * 255).astype(np.uint8)
-        masks +=[raw_mask]
+            masks +=[raw_mask]
         return masks
 
     def create_sample_list(self):
