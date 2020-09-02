@@ -1,0 +1,12 @@
+_BASE_: "bmvc_final.yaml"
+NAME: "bmvc_fbms"
+DATASETS:
+  MAX_TEMPORAL_GAP: 12
+  TEST: "FBMSDataset"
+  TEST_ROOT: "/globalwork/data/fbms/"
+DATALOADER:
+  NUM_SAMPLES: -1
+  NUM_WORKERS: 0
+INFERENCE:
+  SAVE_LOGITS: true
+
