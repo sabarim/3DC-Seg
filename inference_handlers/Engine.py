@@ -50,7 +50,7 @@ class SaliencyInferenceEngine(BaseInferenceEngine):
         dataset.set_video_id(seq)
         # test_sampler = torch.utils.data.distributed.DistributedSampler(dataset, shuffle=False) if distributed else None
         test_sampler = None
-        dataloader = DataLoader(dataset, batch_size=1, num_workers=1, shuffle=False, sampler=test_sampler,
+        dataloader = DataLoader(dataset, batch_size=1, num_workers=0, shuffle=False, sampler=test_sampler,
                                 pin_memory=True)
 
         all_semantic_pred = {}
@@ -59,7 +59,7 @@ class SaliencyInferenceEngine(BaseInferenceEngine):
           if not self.cfg.INFERENCE.EXHAUSTIVE and (iter % (self.cfg.INPUT.TW - self.cfg.INFERENCE.CLIP_OVERLAP)) != 0:
             continue
 
-          info = input_dict['info']
+          info = input_dict['info'][0]
           input = input_dict["images"]
           batch_size = input.shape[0]
           target_dict = dict([(k, t.float().cuda()) for k, t in input_dict['target'].items()])
@@ -70,7 +70,7 @@ class SaliencyInferenceEngine(BaseInferenceEngine):
           # pred = format_pred(pred)
 
           pred_mask = F.softmax(pred[0], dim=1)
-          clip_frames = info[0]['support_indices'][0].data.cpu().numpy()
+          clip_frames = info['support_indices'][0].data.cpu().numpy()
 
           assert batch_size == 1
           for i, f in enumerate(clip_frames):
@@ -80,7 +80,8 @@ class SaliencyInferenceEngine(BaseInferenceEngine):
             else:
               all_semantic_pred[f] = [pred_mask[0, :, i].data.cpu().float()]
               # Use binary masks
-              all_targets[f] = (target_dict['mask'] != 0)[0, 0, i].data.cpu().float()
+              if 'gt_frames' not in info or f in info['gt_frames']:
+                all_targets[f] = (target_dict['mask'] != 0)[0, 0, i].data.cpu().float()
 
         masks = [torch.stack(pred).mean(dim=0) for key, pred in all_semantic_pred.items() if key in all_targets]
         iou = iou_fixed_torch(torch.stack(masks).cuda(), torch.stack(list(all_targets.values())).cuda())
@@ -104,10 +105,10 @@ class SaliencyInferenceEngine(BaseInferenceEngine):
                  .format(np.max(Fmax), mae, ious.avg))
 
   def save_results(self, pred, targets, info):
-    results_path = os.path.join(self.results_dir, info[0]['video'][0])
+    results_path = os.path.join(self.results_dir, info['video'][0])
     pred_for_eval = []
     # pred = pred.data.cpu().numpy().astype(np.uint8)
-    (lh, uh), (lw, uw) = info[0]['pad']
+    (lh, uh), (lw, uw) = info['pad']
     for f in pred.keys():
       M = torch.argmax(torch.stack(pred[f]).mean(dim=0), dim=0)
       h, w = M.shape[-2:]
@@ -116,7 +117,7 @@ class SaliencyInferenceEngine(BaseInferenceEngine):
       if f in targets:
         pred_for_eval += [torch.stack(pred[f]).mean(dim=0)[:, lh[0]:h - uh[0], lw[0]:w - uw[0]]]
 
-      shape = info[0]['shape']
+      shape = info['shape']
       img_M = Image.fromarray(imresize(M.byte(), shape, interp='nearest'))
       img_M.putpalette(color_map().flatten().tolist())
       if not os.path.exists(results_path):

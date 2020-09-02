@@ -20,7 +20,7 @@ class FBMSDataset(Davis):
 
   def get_support_indices(self, index, sequence):
     # index should be start index of the clip
-    if self.is_train:
+    if self.is_train():
       index_range = np.arange(index, min(self.num_frames[sequence],
                                          (index + max(self.max_temporal_gap, self.tw))))
     else:
@@ -86,6 +86,7 @@ class FBMSDataset(Davis):
         sample[INFO]['num_frames'] = len(vid_files)
         sample[INFO]['num_objects'] = 1
         sample[INFO]['shape'] = shape
+        sample[INFO]['gt_frames'] = self.gt_frames[sequence]
 
         self.samples += [sample]
 

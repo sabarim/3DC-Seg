@@ -29,7 +29,7 @@ class VisalDataset(Davis):
 
     def get_support_indices(self, index, sequence):
         # index should be start index of the clip
-        if self.is_train:
+        if self.is_train():
             index_range = np.arange(index, min(self.num_frames[sequence],
                                                (index + max(self.max_temporal_gap, self.tw))))
         else:
