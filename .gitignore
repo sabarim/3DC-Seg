@@ -8,3 +8,7 @@ __pycache__
 .idea
 .history*
 runs
+run_scripts
+run_scripts_args
+results
+saved_models

@@ -11,13 +11,13 @@ TRAINING:
   BASE_LR: 0.00005
 INPUT:
   RESIZE_MODE_TRAIN: "resize_short_edge_and_crop"
-  RESIZE_SHAPE_TRAIN: (240, 480)
+  RESIZE_SHAPE_TRAIN: (480, 854)
   RESIZE_MODE_TEST: "resize_short_edge"
   RESIZE_SHAPE_TEST: (480,)
   TW: 8
 INFERENCE:
   ENGINE: "SaliencyInferenceEngine"
-  EXHAUSTIVE: True
+  EXHAUSTIVE: False
 SOLVER:
   LR_SCHEDULERS: ["exponential", "step"]
 DATASETS:

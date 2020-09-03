@@ -16,6 +16,7 @@ class FBMSDataset(Davis):
     # maintain a dict to store the index length for videos. They are different for fbms
     self.index_length = {}
     self.gt_frames = {}
+    self.video_frames = {}
     super(FBMSDataset, self).__init__(root, mode, resize_mode, resize_shape, tw, max_temporal_gap, num_classes)
 
   def get_support_indices(self, index, sequence):
@@ -25,7 +26,7 @@ class FBMSDataset(Davis):
                                          (index + max(self.max_temporal_gap, self.tw))))
     else:
       index_range = np.arange(index,
-                              min(self.num_frames[sequence], (index + self.tw)))
+                              min(max(self.video_frames[sequence]) + 1, (index + self.tw)))
 
     support_indices = np.random.choice(index_range, min(self.tw, len(index_range)), replace=False)
     support_indices = np.sort(np.append(support_indices, np.repeat([index],
@@ -65,6 +66,8 @@ class FBMSDataset(Davis):
       self.gt_frames[sequence] = [int(f.split("/")[-1].split("_")[-1].split(".")[0])
                                   for f in glob.glob(os.path.join(mask_dir, sequence, '*.png'))]
       self.num_frames[sequence] = len(vid_files)
+      self.video_frames[sequence] = [int(f.split("/")[-1].split("_")[-1].split(".")[0])
+                                     for f in vid_files]
 
       for _f in vid_files:
         sample = {INFO: {}, IMAGES_: [], TARGETS: []}
@@ -95,9 +98,9 @@ class FBMSDataset(Davis):
 
 if __name__ == '__main__':
   fbms = FBMSDataset(root=FBMS_ROOT,
-                     resize_shape=(480, 854), resize_mode=ResizeMode.FIXED_SIZE, mode="train")
+                     resize_shape=(480, 854), resize_mode=ResizeMode.FIXED_SIZE, mode="test")
 
-  # davis.set_video_id('cat-girl')
+  # fbms.set_video_id('marple4')
   print("Dataset size: {}".format(fbms.__len__()))
 
   for i, _input in enumerate(fbms):
