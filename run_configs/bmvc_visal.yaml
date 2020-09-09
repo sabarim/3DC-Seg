@@ -1,0 +1,16 @@
+_BASE_: "bmvc_final.yaml"
+NAME: "bmvc_visal"
+DATASETS:
+  MAX_TEMPORAL_GAP: 8
+  TEST: "VisalDataset"
+  TEST_ROOT: "/globalwork/mahadevan/mywork/data/ViSal/"
+TRAINING:
+  BATCH_SIZE: 1
+  PRECISION: "mixed"
+  BASE_LR: 0.00005
+DATALOADER:
+  NUM_SAMPLES: -1
+  NUM_WORKERS: 0
+INPUT:
+  RESIZE_MODE_TEST: "resize_short_edge"
+  RESIZE_SHAPE_TEST: (480,)

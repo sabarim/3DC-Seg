@@ -1,0 +1,29 @@
+_BASE_: "Base.yaml"
+NAME: "bmvc_final"
+MODEL:
+  BACKBONE:
+    NAME: "resnet152_csn_ir"
+    PRETRAINED_WTS: "saved_models/csn/irCSN_152_ft_kinetics_from_ig65m_f126851907.pth"
+    FREEZE_BN: True
+TRAINING:
+  BATCH_SIZE: 2
+  PRECISION: "mixed"
+  BASE_LR: 0.00005
+INPUT:
+  RESIZE_MODE_TRAIN: "resize_short_edge_and_crop"
+  RESIZE_SHAPE_TRAIN: (480, 854)
+  RESIZE_MODE_TEST: "resize_short_edge"
+  RESIZE_SHAPE_TEST: (480,)
+  TW: 8
+INFERENCE:
+  ENGINE: "SaliencyInferenceEngine"
+  EXHAUSTIVE: False
+SOLVER:
+  LR_SCHEDULERS: ["exponential", "step"]
+DATASETS:
+  MAX_TEMPORAL_GAP: 12
+  IMSET: "2016/val.txt"
+DATALOADER:
+  NUM_SAMPLES: -1
+  NUM_WORKERS: 8
+

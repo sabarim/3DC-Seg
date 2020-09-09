@@ -1,0 +1,49 @@
+VERSION: 2
+MODEL:
+  NETWORK: "SaliencyNetwork"
+  PRETRAINED: True
+  WEIGHTS: "saved_models/csn/irCSN_152_ft_kinetics_from_ig65m_f126851907.pth"
+  N_CLASSES: 2
+  FREEZE_BN: True
+  PIXEL_MEAN: [114.7748, 107.7354, 99.4750]
+  PIXEL_STD: [1.0, 1.0, 1.0]
+  BACKBONE:
+    NAME: "resnet152_csn_ir"
+    PRETRAINED_WTS: "saved_models/csn/irCSN_152_ft_kinetics_from_ig65m_f126851907.pth"
+    FREEZE_BN: True
+  DECODER:
+    INTER_BLOCK: "GC3d"
+    REFINE_BLOCK: "Refine3d"
+TRAINING:
+  BATCH_SIZE: 1
+  OPTIMISER: "Adam"
+  BASE_LR: 0.0001
+  LR_SCHEDULERS: ["exponential", "step"]
+  STEPS: (60000, 80000)
+  MAX_ITER: 90000
+  NUM_EPOCHS: 100
+  LOSSES:
+    NAME: ["ce"]
+    USE_IGNORE_MASK: False
+  PRECISION: "fp32"
+  EVAL_EPOCH: 1
+SOLVER:
+  LR_SCHEDULERS: [""]
+  GAMMA: 0.1
+  STEPS: [10]
+INPUT:
+  RESIZE_MODE_TRAIN: "fixed_size"
+  RESIZE_SHAPE_TRAIN: (374, 1242)
+  RESIZE_MODE_TEST: "fixed_size"
+  RESIZE_SHAPE_TEST: (374, 1242)
+  TW: 8
+DATASETS:
+  TRAIN: "Davis"
+  TRAIN_ROOT: "/globalwork/data/DAVIS-Unsupervised/DAVIS/"
+  TEST: "Davis"
+  TEST_ROOT: "/globalwork/data/DAVIS-Unsupervised/DAVIS/"
+  MAX_TEMPORAL_GAP: 8
+DATALOADER:
+  NUM_SAMPLES: -1
+  NUM_WORKERS: 4
+

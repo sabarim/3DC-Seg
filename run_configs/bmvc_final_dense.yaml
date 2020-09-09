@@ -1,0 +1,6 @@
+_BASE_: "bmvc_final.yaml"
+NAME: "bmvc_final_dense"
+INFERENCE:
+  ENGINE: "SaliencyInferenceEngine"
+  EXHAUSTIVE: True
+
