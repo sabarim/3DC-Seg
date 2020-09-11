@@ -7,14 +7,14 @@ This repository contains the official implementation for the paper:
 
 ECCV 2020 | [Paper](https://arxiv.org/pdf/2008.11516.pdf) | [Video](https://www.youtube.com/watch?v=vU3g2mpL1XA&ab_channel=RWTHVision) | [Project Page](https://www.vision.rwth-aachen.de/publication/00205/)
 
-# Required Packages
+## Required Packages
 
 - Python 3.7
 - PyTorch 1.4 or greater
 - Nvidia-apex: https://github.com/NVIDIA/apex
 - tensorboard, pycocotools and other packages listed in requirements.txt
 
-# Setup
+## Setup
 
 1. Clone the repository and append it to the `PYTHONPATH` variable:
 
@@ -25,7 +25,7 @@ ECCV 2020 | [Paper](https://arxiv.org/pdf/2008.11516.pdf) | [Video](https://www.
    ```
 2. Create a folder named 'saved_models'
 
-# Checkpoint
+## Checkpoint
 
 1. The trained checkpoint is available in the below given link:
 
@@ -35,15 +35,15 @@ ECCV 2020 | [Paper](https://arxiv.org/pdf/2008.11516.pdf) | [Video](https://www.
     | DAVIS, FBMS, ViSal | COCO, YouTubeVOS, DAVIS'17 | [link](https://omnomnom.vision.rwth-aachen.de/data/3DC-Seg/models/bmvc_final.pth)
     
     
-# Usage
+## Usage
 
-## Training:
+### Training:
 
 ```
   python main.py -c run_configs/<name>.yaml --num_workers <number of workers for dataloader> --task train
 ```
 
-## Inference:
+### Inference:
 
 Use the pre-trained checkpoint downloaded from our server along with the provided config files to reproduce the results from Table. 4 and Table. 5 of the paper. Please note that you'll have to use the official [davis evaluation package](https://github.com/davisvideochallenge/davis2017-evaluation) adapted for DAVIS-16 as per the issue listed [here](https://github.com/davisvideochallenge/davis2017-evaluation/issues/4) if you wish to run an evaluation on DAVIS.
 
@@ -75,7 +75,7 @@ python main.py -c run_configs/bmvc_visal.yaml --task infer --wts <path>/bmvc_fin
 ```
 
 
-# Pre-computed results
+## Pre-computed results
 
 Pre-computed segmentation masks for different datasets can be downloaded from the below given links:
 
