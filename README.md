@@ -39,6 +39,9 @@ ECCV 2020 | [Paper](https://arxiv.org/pdf/2008.11516.pdf) | [Video](https://www.
 
 ### Training:
 
+1. Run ```mkdir -p saved_models/csn/```
+2. Download the [pretrained backbone weights](https://omnomnom.vision.rwth-aachen.de/data/3DC-Seg/models/csn.zip) and place it in the folder created above.
+
 ```
   python main.py -c run_configs/<name>.yaml --num_workers <number of workers for dataloader> --task train
 ```
