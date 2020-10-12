@@ -5,7 +5,7 @@ This repository contains the official implementation for the paper:
 
 *Sabarinath Mahadevan\*, Ali Athar\*,Aljoša Ošep, Laura Leal-Taixé, Bastian Leibe*
 
-ECCV 2020 | [Paper](https://arxiv.org/pdf/2008.11516.pdf) | [Video](https://www.youtube.com/watch?v=vU3g2mpL1XA&ab_channel=RWTHVision) | [Project Page](https://www.vision.rwth-aachen.de/publication/00205/)
+BMVC 2020 | [Paper](https://arxiv.org/pdf/2008.11516.pdf) | [Video](https://www.youtube.com/watch?v=vU3g2mpL1XA&ab_channel=RWTHVision) | [Project Page](https://www.vision.rwth-aachen.de/publication/00205/)
 
 ## Required Packages
 
