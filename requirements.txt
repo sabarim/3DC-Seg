@@ -3,7 +3,7 @@ Deprecated==1.2.10
 fvcore==0.1.1.post200513
 imageio-ffmpeg==0.4.1
 imgaug==0.4.0
-numpy==1.17.5
+numpy>=1.21
 pandas==0.25.1
 Pillow>=9.0.0
 pycocotools==2.0
