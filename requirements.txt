@@ -15,6 +15,6 @@ tensorboard==1.15.0
 torch==1.5.1
 torchsummary==1.5.1
 torchvision==0.6.0a0+35d732a
-tornado==6.0.3
+tornado==6.3.2
 tqdm==4.43.0
 yacs==0.1.6
