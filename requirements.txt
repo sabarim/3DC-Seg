@@ -10,7 +10,7 @@ pycocotools==2.0
 pypng==0.0.20
 scikit-image==0.16.2
 scikit-learn==0.21.3
-scipy==1.1.0
+scipy==1.11.1
 tensorboard==1.15.0
 torch==1.5.1
 torchsummary==1.5.1
